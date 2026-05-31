@@ -9,6 +9,33 @@ class Discrete(DataFieldType):
     FUNCTIONAL_TEST = 2
     FAILURE_WARNING = 3
 
+    @property
+    def decoded(self) -> int:
+        return self._value
+
+    @property
+    def encoded(self) -> int:
+        return self._value
+
+    def copy(self) -> "Discrete":
+        return Discrete(self._value)
+
+    def as_dict(self) -> dict:
+        return {
+            "type": "Discrete",
+            "encoded": self._value,
+            "decoded": self._value,
+        }
+
+    def bit_length(self) -> int:
+        return self._value.bit_length()
+
+    def __bytes__(self) -> bytes:
+        return int(self._value).to_bytes(4, "big")
+
+    def __hash__(self) -> int:
+        return hash(self._value)
+
     def __repr__(self) -> str:
         return ("{self.__class__.__qualname__}(value={self._value:#x})").format(
             self=self

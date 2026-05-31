@@ -28,6 +28,41 @@ class BNR(DataFieldType):
         self._decoded_value = bnr_value * resolution
         self._resolution = resolution
 
+    @property
+    def decoded(self) -> Decimal:
+        return self._decoded_value
+
+    @property
+    def encoded(self) -> int:
+        return self._value
+
+    @property
+    def is_negative(self) -> bool:
+        return self._decoded_value < 0
+
+    def copy(self) -> "BNR":
+        return BNR(self._decoded_value, self._resolution)
+
+    def with_resolution(self, new_res: DataFieldValue) -> "BNR":
+        return BNR(self._decoded_value, new_res)
+
+    def as_dict(self) -> dict:
+        return {
+            "type": "BNR",
+            "decoded": str(self._decoded_value),
+            "encoded": self._value,
+            "resolution": str(self._resolution),
+        }
+
+    def bit_length(self) -> int:
+        return self._value.bit_length()
+
+    def __bytes__(self) -> bytes:
+        return int(self._value).to_bytes(4, "big")
+
+    def __hash__(self) -> int:
+        return hash((self._value, self._resolution))
+
     def __int__(self) -> int:
         return int(self._decoded_value)
 

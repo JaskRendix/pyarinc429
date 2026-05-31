@@ -15,6 +15,8 @@ from .errors import FieldOverflowError
 
 
 class Word:
+    """Interprets and validates the composition of a 32‑bit ARINC 429 word."""
+
     EVEN_PARITY = 0
     ODD_PARITY = 1
 
@@ -23,6 +25,35 @@ class Word:
         self._parity_type = 0
         self.parity_type = parity_type
         self.set_bit_field(LSB, MSB, value)
+
+    @classmethod
+    def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> "Word":
+        """Create a Word from a raw 32‑bit integer."""
+        return cls(value, parity_type)
+
+    def to_int(self) -> int:
+        """Return the raw 32‑bit integer value."""
+        return self._value
+
+    @property
+    def raw(self) -> int:
+        """Alias for the raw integer value."""
+        return self._value
+
+    def copy(self) -> "Word":
+        """Return a deep copy of the word."""
+        return Word(self._value, self._parity_type)
+
+    def with_fields(self, **kwargs) -> "Word":
+        """
+        Return a new Word with updated fields.
+        Example:
+            w2 = w.with_fields(label=0o123, data=0x55)
+        """
+        w = self.copy()
+        for name, value in kwargs.items():
+            setattr(w, name, value)
+        return w
 
     def __int__(self) -> int:
         return self._value
@@ -41,6 +72,18 @@ class Word:
             "Label={self.label:#o}, SDI={self.sdi}, Data={self.data:#x}, "
             "SSM={self.ssm}, Parity={self.parity}"
         ).format(self=self)
+
+    def as_dict(self) -> dict:
+        """Return a dictionary representation of the word."""
+        return {
+            "label": self.label,
+            "sdi": self.sdi,
+            "data": self.data,
+            "ssm": self.ssm,
+            "parity": self.parity,
+            "parity_type": self.parity_type,
+            "raw": self._value,
+        }
 
     @property
     def label(self) -> int:
@@ -86,6 +129,13 @@ class Word:
         return self.get_bit_field(PARITY_BIT, PARITY_BIT)
 
     @property
+    def parity_ok(self) -> bool:
+        """Return True if the parity bit matches the computed parity."""
+        count = format(self, "032b").count("1", 1)
+        expected = (count + self._parity_type) % 2
+        return expected == self.parity
+
+    @property
     def parity_type(self) -> int:
         return self._parity_type
 
@@ -118,6 +168,10 @@ class Word:
                 raise FieldOverflowError(value, bit_length)
         else:
             raise ValueError("Bit length must be > 0")
+
+    def validate(self) -> None:
+        """Strict validation hook (currently no-op)."""
+        pass
 
     def get_bit_field(self, lsb: int, msb: int) -> int:
         self._validate_bit_field_range(lsb, msb)
