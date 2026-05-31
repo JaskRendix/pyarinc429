@@ -48,7 +48,6 @@ arinc429/
     definitions.py
     datatypes/
         base.py
-        datafield.py
         bcd.py
         bnr.py
         discrete.py
