@@ -81,6 +81,23 @@ Methods:
 - with_fields(label=..., sdi=..., data=..., ssm=...)  
 - as_dict()  
 
+Parity notes:
+
+- `parity_type` controls whether the word uses odd or even parity. The library
+    computes and updates the parity bit automatically whenever a bit field is
+    written (via `set_bit_field`). Use `parity_ok` to validate the stored parity
+    against the computed value. `Word.validate()` performs a parity check and will
+    raise if the parity bit does not match the configured `parity_type`.
+
+Label metadata:
+
+- `definitions.py` exposes `LabelDefinition` and sample equipment dictionaries
+    (`EQUIP_ADC`, `EQUIP_IRS`). These provide optional metadata (name, type,
+    resolution, unit) that can be used by higher-level decoding helpers. The
+    package does not automatically apply `LabelDefinition` when decoding words —
+    use the metadata as guidance for which `DataFieldType` (`BNR`, `BCD`,
+    `Discrete`) to use when interpreting the `data` and `ssm` fields.
+
 ### WordBuilder
 
 Fluent builder for constructing words:
@@ -217,4 +234,28 @@ word.label = 0o3
 encoded = arinc429.Discrete(6)
 word.set_bit_field(11, 13, encoded)
 decoded = arinc429.Discrete.decode(word.data)
+```
+
+### Williamsburg (SOF/DATA/EOF block transfer)
+
+The package exports both `WilliamsburgTransmitter` and `WilliamsburgReceiver` at
+the package root for convenience. These helpers implement a simple SOF/DATA/EOF
+block transfer framing for packing small byte streams into ARINC 429 words.
+
+Example (transmit + receive):
+
+```python
+from arinc429 import WilliamsburgTransmitter, WilliamsburgReceiver
+
+tx = WilliamsburgTransmitter()
+words = tx.encode(b"HELLO")
+
+rx = WilliamsburgReceiver()
+result = None
+for w in words:
+    out = rx.process_word(w)
+    if out is not None:
+        result = out
+
+assert result == b"HELLO"
 ```

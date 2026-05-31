@@ -21,7 +21,7 @@ from .arinc429 import (
 from .builder import WordBuilder
 from .definitions import EQUIP_ADC, EQUIP_IRS, LabelDefinition
 from .loader import Arinc615Packetizer
-from .williamsburg import WilliamsburgReceiver
+from .williamsburg import WilliamsburgReceiver, WilliamsburgTransmitter
 
 __all__ = [
     "BCD",
@@ -45,5 +45,6 @@ __all__ = [
     "EQUIP_IRS",
     "Arinc615Packetizer",
     "WilliamsburgReceiver",
+    "WilliamsburgTransmitter",
     "WordBuilder",
 ]

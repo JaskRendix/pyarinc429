@@ -170,8 +170,39 @@ class Word:
             raise ValueError("Bit length must be > 0")
 
     def validate(self) -> None:
-        """Strict validation hook (currently no-op)."""
-        pass
+        """Perform strict validation of field ranges and parity.
+
+        Checks performed:
+        - label within 0o000..0o377
+        - sdi is 0..3
+        - ssm is 0..3
+        - data fits in 19 bits (raw field)
+        - parity bit matches computed parity
+        Raises `ValueError` or `FieldOverflowError` on failure.
+        """
+        # Label property will raise ValueError for out-of-range labels
+        try:
+            _ = self.label
+        except ValueError:
+            raise
+
+        # SDI and SSM are 2-bit unsigned fields (0..3)
+        sdi = self.sdi
+        if not (0 <= sdi <= 0b11):
+            raise FieldOverflowError(sdi, SDI_BITS.msb - SDI_BITS.lsb + 1)
+
+        ssm = self.ssm
+        if not (0 <= ssm <= 0b11):
+            raise FieldOverflowError(ssm, SSM_BITS.msb - SSM_BITS.lsb + 1)
+
+        # DATA field must be representable within 19 bits (raw bitfield)
+        data_val = self.get_bit_field(*DATA_BITS)
+        if not (0 <= data_val <= (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1):
+            raise FieldOverflowError(data_val, DATA_BITS.msb - DATA_BITS.lsb + 1)
+
+        # Parity must match configured parity type
+        if not self.parity_ok:
+            raise ValueError("Parity bit does not match computed parity")
 
     def get_bit_field(self, lsb: int, msb: int) -> int:
         self._validate_bit_field_range(lsb, msb)
