@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*/__pycache__/
+
+# Pytest cache
+.pytest_cache/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+
+# IDE / editor junk
+.vscode/
+.idea/
+
+# OS junk
+.DS_Store
+Thumbs.db

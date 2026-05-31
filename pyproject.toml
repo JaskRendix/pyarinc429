@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyARINC429"
+version = "1.0.0"
+description = "A lightweight Python library for encoding and decoding ARINC 429 data words."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+keywords = ["avionics", "arinc", "arinc429", "bnr", "bcd", "discrete"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["arinc429"]
