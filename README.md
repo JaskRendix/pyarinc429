@@ -1,26 +1,23 @@
 # PyARINC429
 
-This project is a maintained and modernized fork of the original work by Jason Hodge:  
-[https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
+PyARINC429 is a maintained fork of the original work by Jason Hodge:  
+<https://github.com/aeroneous/PyARINC429>
 
-PyARINC429 provides Python types for encoding and decoding ARINC 429 words.  
-It implements:
+The library provides Python types for encoding and decoding ARINC 429 words:
 
-- Binary Coded Decimal (BCD)  
-- Binary Number Representation (BNR)  
+- BCD  
+- BNR  
 - Discrete fields  
 - Mixed BCD/discrete and BNR/discrete fields  
 - Bit‑field extraction and validation  
-- Automatic parity handling  
-- Label bit‑reversal per ARINC 429  
+- Parity computation  
+- Label bit‑reversal  
+- Optional label metadata  
+- A builder for constructing words  
 
-The library targets Python 3.12 and uses modern typing.
-
----
+The library targets Python 3.12 and uses type annotations.
 
 ## Installation
-
-Install from source:
 
 ```bash
 git clone https://github.com/yourusername/PyARINC429
@@ -28,43 +25,81 @@ cd PyARINC429
 pip install .
 ```
 
-Install with test dependencies:
+Install test dependencies:
 
 ```bash
 pip install .[test]
 ```
 
-Run the test suite:
+Run tests:
 
 ```bash
 pytest
 ```
 
----
+## Package structure
+
+```
+arinc429/
+    word.py
+    bitfields.py
+    errors.py
+    builder.py
+    definitions.py
+    datatypes/
+        base.py
+        datafield.py
+        bcd.py
+        bnr.py
+        discrete.py
+```
 
 ## API Reference
 
-### `Word`
+### Word
 
-Represents a 32‑bit ARINC 429 word.
+Represents a 32‑bit ARINC 429 word.  
+Parity is recomputed when any bit‑field is written.
 
-**Properties**
+Properties:
 
-- `label` — octal label (0o000–0o377), bit‑reversed on write  
-- `sdi` — Source/Destination Identifier  
-- `data` — bits 11–29  
-- `ssm` — Sign/Status Matrix  
-- `parity` — computed automatically  
-- `parity_type` — `Word.ODD_PARITY` or `Word.EVEN_PARITY`
+- label — octal label (0o000–0o377), bit‑reversed on write  
+- sdi — Source/Destination Identifier (2 bits)  
+- data — bits 11–29 (19 bits)  
+- ssm — Sign/Status Matrix (2 bits)  
+- parity — computed from bits 1–31  
+- parity_type — ODD_PARITY or EVEN_PARITY  
+- parity_ok — parity check result  
+- raw — underlying integer value  
 
-**Methods**
+Methods:
 
-- `get_bit_field(lsb, msb)`  
-- `set_bit_field(lsb, msb, value)`  
+- get_bit_field(lsb, msb)  
+- set_bit_field(lsb, msb, value)  
+- from_int(value, parity_type)  
+- to_int()  
+- copy()  
+- with_fields(label=..., sdi=..., data=..., ssm=...)  
+- as_dict()  
 
----
+### WordBuilder
 
-### `DataField`
+Fluent builder for constructing words:
+
+```python
+from arinc429.builder import WordBuilder
+
+w = (
+    WordBuilder()
+    .label(0o123)
+    .sdi(1)
+    .data(0x55AA)
+    .ssm(2)
+    .build()
+)
+```
+
+### DataField
 
 Defines a bit‑field slice:
 
@@ -72,75 +107,73 @@ Defines a bit‑field slice:
 DataField(lsb: int, msb: int, data: int | DataFieldType)
 ```
 
-Useful for passing directly into `Word.set_bit_field(*field)`.
+Used with Word.set_bit_field(*field).
 
----
+### BCD
 
-### `BCD`
-
-Binary Coded Decimal encoder/decoder.
-
-**Constructor**
+Constructor:
 
 ```python
 BCD(value, resolution)
 ```
 
-**Attributes**
+Attributes:
 
-- `resolution`  
-- `sign`  
-- `_decoded_value`  
+- decoded  
+- encoded  
+- resolution  
+- sign  
 
-**Classmethod**
+Methods:
 
-```python
-BCD.decode(bcd_value, bcd_sign, resolution)
-```
+- decode(bcd_value, bcd_sign, resolution)  
+- copy()  
+- with_resolution(new_resolution)  
+- as_dict()  
 
----
+### BNR
 
-### `BNR`
-
-Binary Number Representation encoder/decoder.
-
-**Constructor**
+Constructor:
 
 ```python
 BNR(value, resolution)
 ```
 
-**Classmethod**
+Attributes:
 
-```python
-BNR.decode(bnr_value, bit_length, resolution)
-```
+- decoded  
+- encoded  
+- resolution  
 
-Handles two’s complement sign extension.
+Methods:
 
----
+- decode(bnr_value, bit_length, resolution)  
+- copy()  
+- with_resolution(new_resolution)  
+- as_dict()  
 
-### `Discrete`
+### Discrete
 
-Represents a discrete bit‑field.
-
-**Constructor**
+Constructor:
 
 ```python
 Discrete(value)
 ```
 
-**Classmethod**
+Attributes:
 
-```python
-Discrete.decode(value)
-```
+- decoded  
+- encoded  
 
----
+Methods:
 
-### `definitions`
+- decode(value)  
+- copy()  
+- as_dict()  
 
-Provides optional label metadata.
+### definitions
+
+Optional label metadata:
 
 ```python
 LabelDefinition(name, type, resolution, unit=None)
@@ -148,79 +181,55 @@ EQUIP_ADC
 EQUIP_IRS
 ```
 
----
+### loader.Arinc615Packetizer
 
-### `loader.Arinc615Packetizer`
-
-Simple ARINC 615‑style packetizer.  
 Splits a byte stream into ARINC 429 words using control labels.
 
----
-
-### `williamsburg.WilliamsburgTransmitter`
+### williamsburg.WilliamsburgTransmitter
 
 Encodes a byte stream into Williamsburg block‑transfer words.
 
-### `williamsburg.WilliamsburgReceiver`
+### williamsburg.WilliamsburgReceiver
 
 Reassembles Williamsburg frames into a byte stream.
-
----
 
 ## Examples
 
 ### BCD
 
 ```python
->>> word = arinc429.Word()
->>> word.label = 0o1
->>> encoded = arinc429.BCD(121.5, resolution=0.1)
->>> field = arinc429.DataField(11, 29, encoded)
->>> word.set_bit_field(*field)
->>> print(word)
-Label=0o1, SDI=0, Data=0x1215, SSM=0, Parity=0
->>> decoded = arinc429.BCD.decode(word.data, word.ssm, 0.1)
->>> print(decoded)
-121.5
+word = arinc429.Word()
+word.label = 0o1
+encoded = arinc429.BCD(121.5, resolution=0.1)
+field = arinc429.DataField(11, 29, encoded)
+word.set_bit_field(*field)
+decoded = arinc429.BCD.decode(word.data, word.ssm, 0.1)
 ```
 
 ### BNR
 
 ```python
->>> word = arinc429.Word()
->>> word.label = 0o2
->>> encoded = arinc429.BNR(90, 0.043945313)
->>> bnr_field = arinc429.DataField(13, 29, encoded)
->>> disc_field = arinc429.DataField(11, 12, arinc429.Discrete(1))
->>> word.set_bit_field(*bnr_field)
->>> print(word)
-Label=0o2, SDI=0, Data=0x1ffc, SSM=0, Parity=1
->>> word.set_bit_field(*disc_field)
->>> print(word)
-Label=0o2, SDI=0, Data=0x1ffd, SSM=0, Parity=0
->>> decoded = arinc429.BNR.decode(
-...     word.get_bit_field(bnr_field.lsb, bnr_field.msb),
-...     17,
-...     0.043945313
-... )
->>> print(decoded)
-BNR(value=89.956055711, resolution=0.043945313)
+word = arinc429.Word()
+word.label = 0o2
+encoded = arinc429.BNR(90, 0.043945313)
+bnr_field = arinc429.DataField(13, 29, encoded)
+disc_field = arinc429.DataField(11, 12, arinc429.Discrete(1))
+word.set_bit_field(*bnr_field)
+word.set_bit_field(*disc_field)
+decoded = arinc429.BNR.decode(
+    word.get_bit_field(bnr_field.lsb, bnr_field.msb),
+    17,
+    0.043945313
+)
 ```
 
 ### Discrete
 
 ```python
->>> word = arinc429.Word()
->>> word.label = 0o3
->>> encoded = arinc429.Discrete(6)
->>> field = arinc429.DataField(11, 12, encoded)
->>> word.set_bit_field(*field)
-arinc429.arinc429.FieldOverflowError: 0x6 overflows 2 bit(s)
->>> field = arinc429.DataField(11, 13, encoded)
->>> word.set_bit_field(*field)
->>> print(word)
-Label=0o3, SDI=0, Data=0x6, SSM=0, Parity=0
->>> decoded = arinc429.Discrete.decode(word.data)
->>> print(decoded)
-6
+word = arinc429.Word()
+word.label = 0o3
+encoded = arinc429.Discrete(6)
+field = arinc429.DataField(11, 13, encoded)
+word.set_bit_field(*field)
+decoded = arinc429.Discrete.decode(word.data)
 ```
