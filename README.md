@@ -99,16 +99,6 @@ w = (
 )
 ```
 
-### DataField
-
-Defines a bit‑field slice:
-
-```python
-DataField(lsb: int, msb: int, data: int | DataFieldType)
-```
-
-Used with Word.set_bit_field(*field).
-
 ### BCD
 
 Constructor:
@@ -201,8 +191,7 @@ Reassembles Williamsburg frames into a byte stream.
 word = arinc429.Word()
 word.label = 0o1
 encoded = arinc429.BCD(121.5, resolution=0.1)
-field = arinc429.DataField(11, 29, encoded)
-word.set_bit_field(*field)
+word.set_bit_field(11, 29, encoded)
 decoded = arinc429.BCD.decode(word.data, word.ssm, 0.1)
 ```
 
@@ -212,10 +201,8 @@ decoded = arinc429.BCD.decode(word.data, word.ssm, 0.1)
 word = arinc429.Word()
 word.label = 0o2
 encoded = arinc429.BNR(90, 0.043945313)
-bnr_field = arinc429.DataField(13, 29, encoded)
-disc_field = arinc429.DataField(11, 12, arinc429.Discrete(1))
-word.set_bit_field(*bnr_field)
-word.set_bit_field(*disc_field)
+word.set_bit_field(13, 29, encoded)
+word.set_bit_field(11, 12, arinc429.Discrete(1))
 decoded = arinc429.BNR.decode(
     word.get_bit_field(bnr_field.lsb, bnr_field.msb),
     17,
@@ -229,7 +216,6 @@ decoded = arinc429.BNR.decode(
 word = arinc429.Word()
 word.label = 0o3
 encoded = arinc429.Discrete(6)
-field = arinc429.DataField(11, 13, encoded)
-word.set_bit_field(*field)
+word.set_bit_field(11, 13, encoded)
 decoded = arinc429.Discrete.decode(word.data)
 ```

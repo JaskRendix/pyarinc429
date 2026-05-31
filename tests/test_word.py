@@ -1,6 +1,5 @@
 import pytest
 
-from arinc429.bitfields import LSB, MSB
 from arinc429.errors import FieldOverflowError
 from arinc429.word import Word
 

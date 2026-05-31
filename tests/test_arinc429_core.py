@@ -5,11 +5,7 @@ import pytest
 from arinc429.arinc429 import (
     BCD,
     BNR,
-    DATA_BITS,
-    LABEL_BITS,
     PARITY_BIT,
-    SDI_BITS,
-    SSM_BITS,
     BitFieldRange,
     Discrete,
     FieldOverflowError,
