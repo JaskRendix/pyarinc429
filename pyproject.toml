@@ -27,4 +27,4 @@ test = ["pytest"]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
-include = ["arinc429"]
+include = ["arinc429*"]
