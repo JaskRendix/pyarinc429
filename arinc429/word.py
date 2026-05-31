@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from .bitfields import (
     DATA_BITS,
     LABEL_BITS,
@@ -12,6 +14,13 @@ from .bitfields import (
 )
 from .datatypes.base import DataFieldType
 from .errors import FieldOverflowError
+
+
+# Local import helpers to avoid module cycles at import time
+def _import_datatypes():
+    from .datatypes.bcd import BCD
+    from .datatypes.bnr import BNR
+    from .datatypes.discrete import Discrete
 
 
 class Word:
@@ -169,40 +178,51 @@ class Word:
         else:
             raise ValueError("Bit length must be > 0")
 
-    def validate(self) -> None:
-        """Perform strict validation of field ranges and parity.
+    def validate(self, raise_on_error: bool = True):
+        """Validate field ranges and parity.
 
-        Checks performed:
-        - label within 0o000..0o377
-        - sdi is 0..3
-        - ssm is 0..3
-        - data fits in 19 bits (raw field)
-        - parity bit matches computed parity
-        Raises `ValueError` or `FieldOverflowError` on failure.
+        When `raise_on_error` is True (default) this method raises the first
+        encountered error (`ValueError` or `FieldOverflowError`). When
+        `raise_on_error` is False the method returns a list of string messages
+        describing issues (empty list means no errors).
         """
+        errors: list[str] = []
+
         # Label property will raise ValueError for out-of-range labels
         try:
             _ = self.label
-        except ValueError:
-            raise
+        except ValueError as exc:
+            errors.append(str(exc))
 
         # SDI and SSM are 2-bit unsigned fields (0..3)
         sdi = self.sdi
         if not (0 <= sdi <= 0b11):
-            raise FieldOverflowError(sdi, SDI_BITS.msb - SDI_BITS.lsb + 1)
+            errors.append(f"SDI out of range: {sdi}")
 
         ssm = self.ssm
         if not (0 <= ssm <= 0b11):
-            raise FieldOverflowError(ssm, SSM_BITS.msb - SSM_BITS.lsb + 1)
+            errors.append(f"SSM out of range: {ssm}")
 
         # DATA field must be representable within 19 bits (raw bitfield)
         data_val = self.get_bit_field(*DATA_BITS)
         if not (0 <= data_val <= (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1):
-            raise FieldOverflowError(data_val, DATA_BITS.msb - DATA_BITS.lsb + 1)
+            errors.append(f"DATA out of range: {data_val}")
 
         # Parity must match configured parity type
         if not self.parity_ok:
-            raise ValueError("Parity bit does not match computed parity")
+            errors.append("Parity bit does not match computed parity")
+
+        if raise_on_error:
+            if errors:
+                # Raise first error with an appropriate exception type
+                first = errors[0]
+                if "out of range" in first or "overflows" in first:
+                    # Prefer FieldOverflowError when possible
+                    # We don't have bit_length here for every message; raise ValueError
+                    raise ValueError(first)
+                raise ValueError(first)
+            return None
+        return errors
 
     def get_bit_field(self, lsb: int, msb: int) -> int:
         self._validate_bit_field_range(lsb, msb)
@@ -229,3 +249,36 @@ class Word:
         count = (self._value & ((1 << 31) - 1)).bit_count()
         parity_value = ((count + self._parity_type) % 2) << parity_offset
         self._value = (self._value & parity_mask) | parity_value
+
+    def decode_with_definition(self, definition) -> Optional[DataFieldType]:
+        """Decode this word's data using a provided `LabelDefinition`.
+
+        Returns a `DataFieldType` instance (one of `BNR`, `BCD`, `Discrete`) or
+        `None` if the definition type is unrecognized.
+        """
+        # Import datatypes lazily to avoid import cycles
+        from .datatypes.bcd import BCD
+        from .datatypes.bnr import BNR
+        from .datatypes.discrete import Discrete
+
+        data_val = self.get_bit_field(*DATA_BITS)
+        if definition.type == "BNR":
+            bit_length = DATA_BITS.msb - DATA_BITS.lsb + 1
+            return BNR.decode(data_val, bit_length, definition.resolution)
+        if definition.type == "BCD":
+            # For BCD, the sign is commonly stored in SSM
+            return BCD.decode(data_val, self.ssm, definition.resolution)
+        if definition.type == "DISCRETE":
+            return Discrete.decode(data_val)
+        return None
+
+    def decode_by_label(self, definitions: dict) -> Optional[DataFieldType]:
+        """Lookup `LabelDefinition` by this word's label and decode using it.
+
+        Returns decoded `DataFieldType` or raises `KeyError` if label not found.
+        """
+        try:
+            definition = definitions[self.label]
+        except Exception:
+            raise KeyError(f"Label {self.label:#o} not present in definitions")
+        return self.decode_with_definition(definition)

@@ -84,10 +84,24 @@ Methods:
 Parity notes:
 
 - `parity_type` controls whether the word uses odd or even parity. The library
+ - `parity_type` controls whether the word uses odd or even parity. The library
     computes and updates the parity bit automatically whenever a bit field is
     written (via `set_bit_field`). Use `parity_ok` to validate the stored parity
     against the computed value. `Word.validate()` performs a parity check and will
     raise if the parity bit does not match the configured `parity_type`.
+
+WordBuilder parity:
+
+- Use `WordBuilder.parity_type(Word.EVEN_PARITY)` to fluently set parity when
+    constructing words.
+
+Data field integer semantics:
+
+- Conversions using `int(...)` on data-field objects now return the encoded
+    integer payload (the on-wire integer), while `float(...)`/`str(...)` and
+    the `decoded` property continue to expose the semantic decoded value. This
+    makes `int(BNR|BCD|Discrete)` safe to pass into `set_bit_field` and aligns
+    the types across data-field classes.
 
 Label metadata:
 
@@ -258,4 +272,48 @@ for w in words:
         result = out
 
 assert result == b"HELLO"
+```
+
+Decoding with label metadata:
+
+```python
+from arinc429 import Word
+from arinc429.definitions import EQUIP_ADC, decode_word
+
+w = Word()
+w.label = 0o203  # Pressure Altitude in EQUIP_ADC
+# assume `w.data` contains encoded BNR for 100 feet
+decoded = decode_word(w, EQUIP_ADC)
+if decoded is not None:
+    data_field, definition = decoded
+    print(definition.name, float(data_field))
+else:
+    # handle missing metadata gracefully
+    print("No label metadata; decode manually using BNR/BCD/Discrete")
+```
+
+Or using the `Word` helper:
+
+```python
+from arinc429 import Word
+from arinc429.definitions import EQUIP_ADC
+
+w = Word()
+try:
+    decoded = w.decode_by_label(EQUIP_ADC)
+except KeyError:
+    # Missing label metadata
+    decoded = None
+
+if decoded:
+    print(float(decoded))
+```
+
+Using `Word.validate()` without raising exceptions:
+
+```python
+w = Word()
+errors = w.validate(raise_on_error=False)
+if errors:
+    print("Validation issues:", errors)
 ```

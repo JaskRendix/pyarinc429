@@ -64,7 +64,8 @@ class BNR(DataFieldType):
         return hash((self._value, self._resolution))
 
     def __int__(self) -> int:
-        return int(self._decoded_value)
+        # Return the encoded integer payload (quantized value)
+        return int(self._value)
 
     def __float__(self) -> float:
         return float(self._decoded_value)

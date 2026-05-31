@@ -99,7 +99,7 @@ def test_parity_updates_on_data_change():
 def test_bcd_basic_encoding():
     b = BCD(121.5, resolution=0.1)
     assert float(b) == 121.5
-    assert int(b) == 121
+    assert int(b) == b.encoded
 
 
 def test_bcd_sign_positive():
