@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+from decimal import Decimal
+
+from .base import DataFieldType
+
+DataFieldValue = int | float | Decimal
+
+
+class BNR(DataFieldType):
+    PLUS = NORTH = EAST = RIGHT = TO = ABOVE = 0
+    MINUS = SOUTH = WEST = LEFT = FROM = BELOW = 1
+
+    FAILURE_WARNING = 0
+    NO_COMPUTED_DATA = 1
+    FUNCTIONAL_TEST = 2
+    NORMAL_OPERATION = 3
+
+    def __init__(
+        self, value: DataFieldValue = 0, resolution: DataFieldValue = 1
+    ) -> None:
+        value = Decimal(str(value))
+        resolution = Decimal(str(resolution))
+
+        bnr_value = value // resolution
+        super().__init__(bnr_value)
+
+        self._decoded_value = bnr_value * resolution
+        self._resolution = resolution
+
+    def __int__(self) -> int:
+        return int(self._decoded_value)
+
+    def __float__(self) -> float:
+        return float(self._decoded_value)
+
+    def __repr__(self) -> str:
+        return (
+            "{self.__class__.__qualname__}(value={self._decoded_value}, "
+            "resolution={self.resolution})"
+        ).format(self=self)
+
+    def __str__(self) -> str:
+        return str(self._decoded_value)
+
+    @property
+    def resolution(self) -> Decimal:
+        return self._resolution
+
+    @classmethod
+    def decode(
+        cls, bnr_value: int, bnr_bit_length: int, resolution: DataFieldValue = 1
+    ) -> "BNR":
+        sign = (bnr_value >> (bnr_bit_length - 1)) & 1
+        bnr_value -= sign << bnr_bit_length
+        value = bnr_value * resolution
+        return cls(value, resolution)
