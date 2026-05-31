@@ -131,7 +131,7 @@ class Word:
     @property
     def parity_ok(self) -> bool:
         """Return True if the parity bit matches the computed parity."""
-        count = format(self, "032b").count("1", 1)
+        count = (self._value & ((1 << 31) - 1)).bit_count()
         expected = (count + self._parity_type) % 2
         return expected == self.parity
 
@@ -195,6 +195,6 @@ class Word:
         encoded = (value & value_mask) << bit_field_offset
         self._value = (self._value & word_mask) | encoded
 
-        count = format(self, "032b").count("1", 1)
+        count = (self._value & ((1 << 31) - 1)).bit_count()
         parity_value = ((count + self._parity_type) % 2) << parity_offset
         self._value = (self._value & parity_mask) | parity_value
