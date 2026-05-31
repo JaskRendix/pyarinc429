@@ -17,6 +17,25 @@ class Discrete(DataFieldType):
     def encoded(self) -> int:
         return self._value
 
+    @property
+    def name(self) -> str:
+        mapping = {
+            0: "NORMAL_OPERATION",
+            1: "NO_COMPUTED_DATA",
+            2: "FUNCTIONAL_TEST",
+            3: "FAILURE_WARNING",
+        }
+        return mapping.get(self._value, "UNKNOWN")
+
+    def is_valid(self) -> bool:
+        return 0 <= self._value <= 3
+
+    def clamp(self) -> "Discrete":
+        return Discrete(self._value & 0b11)
+
+    def to_bits(self, width: int = 2) -> int:
+        return self._value & ((1 << width) - 1)
+
     def copy(self) -> "Discrete":
         return Discrete(self._value)
 
@@ -25,6 +44,7 @@ class Discrete(DataFieldType):
             "type": "Discrete",
             "encoded": self._value,
             "decoded": self._value,
+            "name": self.name,
         }
 
     def bit_length(self) -> int:
@@ -37,9 +57,7 @@ class Discrete(DataFieldType):
         return hash(self._value)
 
     def __repr__(self) -> str:
-        return ("{self.__class__.__qualname__}(value={self._value:#x})").format(
-            self=self
-        )
+        return f"{self.__class__.__qualname__}(value={self._value:#x})"
 
     def __str__(self) -> str:
         return str(self._value)
@@ -47,3 +65,13 @@ class Discrete(DataFieldType):
     @classmethod
     def decode(cls, discrete_value: int) -> "Discrete":
         return cls(discrete_value)
+
+    @classmethod
+    def from_name(cls, name: str) -> "Discrete":
+        mapping = {
+            "NORMAL_OPERATION": 0,
+            "NO_COMPUTED_DATA": 1,
+            "FUNCTIONAL_TEST": 2,
+            "FAILURE_WARNING": 3,
+        }
+        return cls(mapping[name])

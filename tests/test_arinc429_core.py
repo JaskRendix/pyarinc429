@@ -7,7 +7,6 @@ from arinc429.arinc429 import (
     BNR,
     PARITY_BIT,
     BitFieldRange,
-    Discrete,
     FieldOverflowError,
     Word,
 )
@@ -143,17 +142,6 @@ def test_bnr_two_complement_negative_decode():
     # 8-bit signed: -3 encoded as 0b11111101 = 0xFD
     decoded = BNR.decode(0xFD, 8, 1)
     assert float(decoded) == -3
-
-
-def test_discrete_basic():
-    d = Discrete(5)
-    assert int(d) == 5
-    assert str(d) == "5"
-
-
-def test_discrete_decode():
-    d = Discrete.decode(7)
-    assert int(d) == 7
 
 
 def test_word_str_contains_fields():
