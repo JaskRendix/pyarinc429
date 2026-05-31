@@ -19,6 +19,7 @@ from .arinc429 import (
     FieldOverflowError,
     Word,
 )
+from .builder import WordBuilder
 from .definitions import EQUIP_ADC, EQUIP_IRS, LabelDefinition
 from .loader import Arinc615Packetizer
 from .williamsburg import WilliamsburgReceiver
@@ -46,4 +47,5 @@ __all__ = [
     "EQUIP_IRS",
     "Arinc615Packetizer",
     "WilliamsburgReceiver",
+    "WordBuilder",
 ]
