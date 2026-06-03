@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal, Optional, Tuple
+from typing import Literal
 
 
 # Helper to decode a Word using a provided LabelDefinition mapping
-def decode_word(word, definitions) -> Optional[object]:
+def decode_word(word, definitions) -> object | None:
     """Decode a `Word` using the provided definitions map.
 
     Returns a tuple `(data_field, definition)` when successful, or `None` if no

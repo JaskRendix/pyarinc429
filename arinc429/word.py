@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any
 
 from .bitfields import (
     DATA_BITS,
+    DECODE_LABEL,
+    ENCODE_LABEL,
     LABEL_BITS,
-    LABELS,
     LSB,
     MSB,
     PARITY_BIT,
@@ -16,13 +17,6 @@ from .datatypes.base import DataFieldType
 from .errors import FieldOverflowError
 
 
-# Local import helpers to avoid module cycles at import time
-def _import_datatypes():
-    from .datatypes.bcd import BCD
-    from .datatypes.bnr import BNR
-    from .datatypes.discrete import Discrete
-
-
 class Word:
     """Interprets and validates the composition of a 32‑bit ARINC 429 word."""
 
@@ -31,34 +25,25 @@ class Word:
 
     def __init__(self, value: int = 0, parity_type: int = ODD_PARITY) -> None:
         self._value = 0
-        self._parity_type = 0
-        self.parity_type = parity_type
-        self.set_bit_field(LSB, MSB, value)
+        self._parity_type = parity_type
+        self._set_raw_preserving_parity(value)
 
     @classmethod
-    def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> "Word":
-        """Create a Word from a raw 32‑bit integer."""
+    def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> Word:
+        """Create a Word from a raw 32‑bit integer without corrupting parity."""
         return cls(value, parity_type)
 
     def to_int(self) -> int:
-        """Return the raw 32‑bit integer value."""
         return self._value
 
     @property
     def raw(self) -> int:
-        """Alias for the raw integer value."""
         return self._value
 
-    def copy(self) -> "Word":
-        """Return a deep copy of the word."""
+    def copy(self) -> Word:
         return Word(self._value, self._parity_type)
 
-    def with_fields(self, **kwargs) -> "Word":
-        """
-        Return a new Word with updated fields.
-        Example:
-            w2 = w.with_fields(label=0o123, data=0x55)
-        """
+    def with_fields(self, **kwargs: Any) -> Word:
         w = self.copy()
         for name, value in kwargs.items():
             setattr(w, name, value)
@@ -67,23 +52,22 @@ class Word:
     def __int__(self) -> int:
         return self._value
 
-    def __format__(self, format_spec: str) -> str:
-        return self._value.__format__(format_spec)
-
     def __index__(self) -> int:
         return self._value
 
+    def __format__(self, fmt: str) -> str:
+        return self._value.__format__(fmt)
+
     def __repr__(self) -> str:
-        return ("{self.__class__.__qualname__}({self._value:#x})").format(self=self)
+        return f"Word({self._value:#x})"
 
     def __str__(self) -> str:
         return (
-            "Label={self.label:#o}, SDI={self.sdi}, Data={self.data:#x}, "
-            "SSM={self.ssm}, Parity={self.parity}"
-        ).format(self=self)
+            f"Label={self.label:#o}, SDI={self.sdi}, Data={self.data:#x}, "
+            f"SSM={self.ssm}, Parity={self.parity}"
+        )
 
-    def as_dict(self) -> dict:
-        """Return a dictionary representation of the word."""
+    def as_dict(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "sdi": self.sdi,
@@ -96,18 +80,16 @@ class Word:
 
     @property
     def label(self) -> int:
-        return LABELS[self.get_bit_field(*LABEL_BITS)]
+        wire = self.get_bit_field(*LABEL_BITS)
+        return DECODE_LABEL[wire]
 
     @label.setter
     def label(self, value: int) -> None:
         try:
-            self.set_bit_field(*LABEL_BITS, LABELS[value])
+            encoded = ENCODE_LABEL[value]
         except KeyError:
-            raise ValueError(
-                "Label must be >= {:#o} and <= {:#o}: {:#o}".format(
-                    min(LABELS), max(LABELS), value
-                )
-            )
+            raise ValueError(f"Invalid ARINC 429 label: {value:#o}")
+        self.set_bit_field(*LABEL_BITS, encoded)
 
     @property
     def sdi(self) -> int:
@@ -139,7 +121,6 @@ class Word:
 
     @property
     def parity_ok(self) -> bool:
-        """Return True if the parity bit matches the computed parity."""
         count = (self._value & ((1 << 31) - 1)).bit_count()
         expected = (count + self._parity_type) % 2
         return expected == self.parity
@@ -150,135 +131,124 @@ class Word:
 
     @parity_type.setter
     def parity_type(self, value: int) -> None:
-        if value in (self.EVEN_PARITY, self.ODD_PARITY):
-            self._parity_type = value
-            self.set_bit_field(LSB, MSB, self._value)
-        else:
-            raise ValueError(
-                "Parity setting must be {cls.EVEN_PARITY} or "
-                "{cls.ODD_PARITY}: {0}".format(value, cls=self)
-            )
+        if value not in (self.EVEN_PARITY, self.ODD_PARITY):
+            raise ValueError(f"Invalid parity type: {value}")
+        self._parity_type = value
+        self._recompute_parity()
 
     @staticmethod
     def _validate_bit_field_range(lsb: int, msb: int) -> None:
-        if lsb < LSB:
-            raise ValueError("LSB must be >= {} and <= {}: {}".format(LSB, MSB, lsb))
-        elif msb > MSB:
-            raise ValueError("MSB must be >= {} and <= {}: {}".format(LSB, MSB, msb))
-        elif msb < lsb:
-            raise ValueError("MSB must be >= LSB: {}".format(msb))
+        if lsb < LSB or msb > MSB or msb < lsb:
+            raise ValueError(f"Invalid bit range {lsb}..{msb}")
 
     @staticmethod
     def _validate_bit_length(bit_length: int, value: int) -> None:
-        if bit_length > 0:
-            max_value = (1 << bit_length) - 1
-            min_value = ~(max_value >> 1)
-            if not (min_value <= value <= max_value):
-                raise FieldOverflowError(value, bit_length)
-        else:
+        """Signed two's-complement range check for generic bitfields."""
+        if bit_length <= 0:
             raise ValueError("Bit length must be > 0")
 
-    def validate(self, raise_on_error: bool = True):
-        """Validate field ranges and parity.
+        max_value = (1 << bit_length) - 1
+        min_value = ~(max_value >> 1)  # e.g. 5 bits → -16..15
 
-        When `raise_on_error` is True (default) this method raises the first
-        encountered error (`ValueError` or `FieldOverflowError`). When
-        `raise_on_error` is False the method returns a list of string messages
-        describing issues (empty list means no errors).
-        """
+        if not (min_value <= value <= max_value):
+            raise FieldOverflowError(value, bit_length)
+
+    def validate(self, raise_on_error: bool = True) -> list[str] | None:
         errors: list[str] = []
 
-        # Label property will raise ValueError for out-of-range labels
+        # Label
         try:
             _ = self.label
-        except ValueError as exc:
+        except Exception as exc:
             errors.append(str(exc))
 
-        # SDI and SSM are 2-bit unsigned fields (0..3)
-        sdi = self.sdi
-        if not (0 <= sdi <= 0b11):
-            errors.append(f"SDI out of range: {sdi}")
+        # SDI / SSM
+        if not (0 <= self.sdi <= 3):
+            errors.append(f"SDI out of range: {self.sdi}")
+        if not (0 <= self.ssm <= 3):
+            errors.append(f"SSM out of range: {self.ssm}")
 
-        ssm = self.ssm
-        if not (0 <= ssm <= 0b11):
-            errors.append(f"SSM out of range: {ssm}")
-
-        # DATA field must be representable within 19 bits (raw bitfield)
-        data_val = self.get_bit_field(*DATA_BITS)
-        if not (0 <= data_val <= (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1):
+        # DATA
+        data_val = self.data
+        max_data = (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1
+        if not (0 <= data_val <= max_data):
             errors.append(f"DATA out of range: {data_val}")
 
-        # Parity must match configured parity type
+        # Parity
         if not self.parity_ok:
             errors.append("Parity bit does not match computed parity")
 
         if raise_on_error:
             if errors:
-                # Raise first error with an appropriate exception type
-                first = errors[0]
-                if "out of range" in first or "overflows" in first:
-                    # Prefer FieldOverflowError when possible
-                    # We don't have bit_length here for every message; raise ValueError
-                    raise ValueError(first)
-                raise ValueError(first)
+                raise ValueError(errors[0])
             return None
         return errors
 
     def get_bit_field(self, lsb: int, msb: int) -> int:
         self._validate_bit_field_range(lsb, msb)
-        bit_field_length = msb - lsb + 1
-        bit_field_offset = lsb - 1
-        mask = (1 << bit_field_length) - 1
-        return (self._value >> bit_field_offset) & mask
+        length = msb - lsb + 1
+        offset = lsb - 1
+        mask = (1 << length) - 1
+        return (self._value >> offset) & mask
 
     def set_bit_field(self, lsb: int, msb: int, value: int | DataFieldType) -> None:
         self._validate_bit_field_range(lsb, msb)
-        bit_field_length = msb - lsb + 1
-        self._validate_bit_length(bit_field_length, value)
 
-        bit_field_offset = lsb - 1
+        if isinstance(value, DataFieldType):
+            value = int(value)
+
+        length = msb - lsb + 1
+        self._validate_bit_length(length, value)
+
+        offset = lsb - 1
+        mask = ((1 << length) - 1) << offset
+
+        self._value &= ~mask
+        self._value |= (value & ((1 << length) - 1)) << offset
+
+        self._recompute_parity()
+
+    def _set_raw_preserving_parity(self, value: int) -> None:
+        """Set raw 32‑bit value without corrupting the parity bit."""
+        self._value = value & 0xFFFFFFFF
+        self._recompute_parity()
+
+    def _recompute_parity(self) -> None:
+        """Recompute parity without destroying other bits."""
         parity_offset = PARITY_BIT - 1
 
-        value_mask = (1 << bit_field_length) - 1
-        parity_mask = (1 << parity_offset) - 1
-        word_mask = ~(value_mask << bit_field_offset)
-
-        encoded = (value & value_mask) << bit_field_offset
-        self._value = (self._value & word_mask) | encoded
-
+        # Count bits 1–31
         count = (self._value & ((1 << 31) - 1)).bit_count()
-        parity_value = ((count + self._parity_type) % 2) << parity_offset
-        self._value = (self._value & parity_mask) | parity_value
+        parity_bit = (count + self._parity_type) % 2
 
-    def decode_with_definition(self, definition) -> Optional[DataFieldType]:
-        """Decode this word's data using a provided `LabelDefinition`.
+        # Clear parity bit
+        self._value &= ~(1 << parity_offset)
 
-        Returns a `DataFieldType` instance (one of `BNR`, `BCD`, `Discrete`) or
-        `None` if the definition type is unrecognized.
-        """
-        # Import datatypes lazily to avoid import cycles
+        # Set parity bit
+        self._value |= parity_bit << parity_offset
+
+    def decode_with_definition(self, definition) -> DataFieldType | None:
         from .datatypes.bcd import BCD
         from .datatypes.bnr import BNR
         from .datatypes.discrete import Discrete
 
-        data_val = self.get_bit_field(*DATA_BITS)
+        data_val = self.data
+
         if definition.type == "BNR":
             bit_length = DATA_BITS.msb - DATA_BITS.lsb + 1
             return BNR.decode(data_val, bit_length, definition.resolution)
+
         if definition.type == "BCD":
-            # For BCD, the sign is commonly stored in SSM
             return BCD.decode(data_val, self.ssm, definition.resolution)
+
         if definition.type == "DISCRETE":
             return Discrete.decode(data_val)
+
         return None
 
-    def decode_by_label(self, definitions: dict) -> Optional[DataFieldType]:
-        """Lookup `LabelDefinition` by this word's label and decode using it.
-
-        Returns decoded `DataFieldType` or raises `KeyError` if label not found.
-        """
+    def decode_by_label(self, definitions: dict[int, Any]) -> DataFieldType | None:
         try:
             definition = definitions[self.label]
-        except Exception:
+        except KeyError:
             raise KeyError(f"Label {self.label:#o} not present in definitions")
         return self.decode_with_definition(definition)

@@ -22,7 +22,6 @@ class Arinc615Packetizer:
     def to_words(self) -> list[Word]:
         words: list[Word] = []
 
-        # Each ARINC 429 data field is 19 bits → 2 bytes (16 bits) safe
         for block in self._chunk(2):
             w = Word()
             w.label = self.CONTROL_LABEL_DATA
@@ -30,10 +29,9 @@ class Arinc615Packetizer:
             w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, value)
             words.append(w)
 
-        # EOF word
         eof = Word()
         eof.label = self.CONTROL_LABEL_EOF
-        eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)
+        eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)  # ← required by tests
         words.append(eof)
 
         return words

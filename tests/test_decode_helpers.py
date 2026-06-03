@@ -1,9 +1,9 @@
+from decimal import Decimal
+
 import pytest
 
 from arinc429 import Word
-from arinc429.definitions import decode_word, EQUIP_ADC
-from arinc429.definitions import LabelDefinition
-from decimal import Decimal
+from arinc429.definitions import EQUIP_ADC, LabelDefinition, decode_word
 
 
 def test_decode_with_definition_unknown_type_returns_none():

@@ -17,6 +17,7 @@ class WilliamsburgReceiver:
     def __init__(self) -> None:
         self.buffer = bytearray()
         self.assembling = False
+        self.expected_length: int | None = None
 
     def process_word(self, word: Word) -> bytes | None:
         """
@@ -24,35 +25,39 @@ class WilliamsburgReceiver:
         Returns a completed block when EOF is received.
         """
 
-        if word.label == self.LABEL_SOF:
+        label = word.label
+
+        if label == self.LABEL_SOF:
             self.buffer.clear()
             self.assembling = True
+            self.expected_length = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
             return None
 
         if not self.assembling:
             return None
 
-        if word.label == self.LABEL_DATA:
+        if label == self.LABEL_DATA:
             value = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
             self.buffer.extend(value.to_bytes(2, "big"))
             return None
 
-        if word.label == self.LABEL_EOF:
+        if label == self.LABEL_EOF:
             self.assembling = False
-            return bytes(self.buffer)
 
-        # Unexpected label → abort frame
+            if self.expected_length is None:
+                return bytes(self.buffer)
+
+            return bytes(self.buffer[: self.expected_length])
+
         self.buffer.clear()
         self.assembling = False
+        self.expected_length = None
         return None
 
 
 class WilliamsburgTransmitter:
     """
     Splits a byte stream into Williamsburg block-transfer ARINC 429 words.
-
-    Produces:
-        SOF → DATA... → EOF
     """
 
     LABEL_SOF = 0o144
@@ -60,10 +65,6 @@ class WilliamsburgTransmitter:
     LABEL_DATA = 0o146
 
     def __init__(self, chunk_size: int = 2) -> None:
-        """
-        chunk_size: number of bytes per ARINC 429 data word.
-                    2 bytes = 16 bits → fits inside DATA_BITS (19 bits).
-        """
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
         if chunk_size > 2:
@@ -81,13 +82,11 @@ class WilliamsburgTransmitter:
 
         words: list[Word] = []
 
-        # Start-of-frame
         sof = Word()
         sof.label = self.LABEL_SOF
-        sof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)
+        sof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, len(data))
         words.append(sof)
 
-        # Data blocks
         for block in self._chunk(data):
             w = Word()
             w.label = self.LABEL_DATA
@@ -95,7 +94,6 @@ class WilliamsburgTransmitter:
             w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, value)
             words.append(w)
 
-        # End-of-frame
         eof = Word()
         eof.label = self.LABEL_EOF
         eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)
