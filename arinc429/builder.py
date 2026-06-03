@@ -5,41 +5,55 @@ from .word import Word
 
 
 class WordBuilder:
-    def __init__(self, parity_type=Word.ODD_PARITY):
-        self._label = None
-        self._sdi = None
-        self._data = None
-        self._ssm = None
+    """
+    Fluent builder for constructing ARINC 429 Word instances.
+    """
+
+    _allowed_fields = {"_label", "_sdi", "_data", "_ssm", "_parity_type"}
+
+    def __init__(self, parity_type: int = Word.ODD_PARITY) -> None:
+        self._label: int | None = None
+        self._sdi: int | None = None
+        self._data: int | None = None
+        self._ssm: int | None = None
         self._parity_type = parity_type
 
-    def label(self, value: int) -> "WordBuilder":
+    # --- Fluent setters -----------------------------------------------------
+
+    def label(self, value: int) -> WordBuilder:
         self._label = value
         return self
 
-    def sdi(self, value: int) -> "WordBuilder":
+    def sdi(self, value: int) -> WordBuilder:
         self._sdi = value
         return self
 
-    def data(self, value: int) -> "WordBuilder":
+    def data(self, value: int) -> WordBuilder:
         self._data = value
         return self
 
-    def ssm(self, value: int) -> "WordBuilder":
+    def ssm(self, value: int) -> WordBuilder:
         self._ssm = value
         return self
 
+    def parity_type(self, value: int) -> WordBuilder:
+        self._parity_type = value
+        return self
+
     def build(self) -> Word:
-        # Reject unexpected builder fields to avoid accidental misuse
-        allowed = {"_label", "_sdi", "_data", "_ssm", "_parity_type"}
+        # Detect accidental private attributes
         unknowns = [
-            n
-            for n in self.__dict__.keys()
-            if n.startswith("_") and n not in allowed and getattr(self, n) is not None
+            name
+            for name in self.__dict__
+            if name.startswith("_")
+            and name not in self._allowed_fields
+            and getattr(self, name) is not None
         ]
         if unknowns:
             raise ValueError(f"Unknown builder fields present: {unknowns}")
 
         w = Word(0, self._parity_type)
+
         try:
             if self._label is not None:
                 w.label = self._label
@@ -49,20 +63,11 @@ class WordBuilder:
                 w.data = self._data
             if self._ssm is not None:
                 w.ssm = self._ssm
-        except AttributeError as exc:
-            raise ValueError("Invalid builder field or attribute") from exc
+
+        except FieldOverflowError:
+            raise
+
         except Exception as exc:
-            # Preserve FieldOverflowError for callers; wrap other exceptions
-            if isinstance(exc, FieldOverflowError):
-                raise
-            raise ValueError(f"Failed to build Word: {exc}") from exc
+            raise ValueError(f"Failed to build Word layout: {exc}") from exc
 
         return w
-
-    def parity_type(self, value: int) -> "WordBuilder":
-        """Fluently set the desired parity type for the built Word.
-
-        Accepts `Word.EVEN_PARITY` or `Word.ODD_PARITY`.
-        """
-        self._parity_type = value
-        return self
