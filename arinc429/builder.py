@@ -18,7 +18,6 @@ class WordBuilder:
         self._ssm: int | None = None
         self._parity_type = parity_type
 
-    # --- Fluent setters -----------------------------------------------------
 
     def label(self, value: int) -> WordBuilder:
         self._label = value

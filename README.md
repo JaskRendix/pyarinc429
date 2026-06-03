@@ -1,19 +1,17 @@
 # PyARINC429
 
-PyARINC429 is a maintained fork of the original work by Jason Hodge:  
-<https://github.com/aeroneous/PyARINC429>
-
-The library provides Python types for encoding and decoding ARINC 429 words:
+PyARINC429 is a maintained fork of the original work by Jason Hodge.  
+It provides Python types for encoding and decoding ARINC 429 words:
 
 - BCD  
 - BNR  
-- Discrete fields  
-- Mixed BCD/discrete and BNR/discrete fields  
+- Discrete  
+- Mixed fields  
 - Bit‑field extraction and validation  
 - Parity computation  
 - Label bit‑reversal  
 - Optional label metadata  
-- A builder for constructing words  
+- A fluent WordBuilder  
 
 The library targets Python 3.12 and uses type annotations.
 
@@ -25,15 +23,10 @@ cd PyARINC429
 pip install .
 ```
 
-Install test dependencies:
+Tests:
 
 ```bash
 pip install .[test]
-```
-
-Run tests:
-
-```bash
 pytest
 ```
 
@@ -53,68 +46,46 @@ arinc429/
         discrete.py
 ```
 
-## API Reference
+## Word
 
-### Word
+Represents a 32‑bit ARINC 429 word.
 
-Represents a 32‑bit ARINC 429 word.  
-Parity is recomputed when any bit‑field is written.
+### Properties
 
-Properties:
+- **label** — octal label (0o000–0o377), bit‑reversed on write  
+- **sdi** — 2‑bit SDI  
+- **data** — bits 11–29 (19 bits)  
+- **ssm** — 2‑bit SSM  
+- **parity** — stored parity bit  
+- **parity_type** — `ODD_PARITY` or `EVEN_PARITY`  
+- **parity_ok** — computed parity check  
+- **raw** — underlying integer  
 
-- label — octal label (0o000–0o377), bit‑reversed on write  
-- sdi — Source/Destination Identifier (2 bits)  
-- data — bits 11–29 (19 bits)  
-- ssm — Sign/Status Matrix (2 bits)  
-- parity — computed from bits 1–31  
-- parity_type — ODD_PARITY or EVEN_PARITY  
-- parity_ok — parity check result  
-- raw — underlying integer value  
+### Methods
 
-Methods:
+- **get_bit_field(lsb, msb)**  
+- **set_bit_field(lsb, msb, value)**  
+- **from_int(value, parity_type)**  
+- **to_int()**  
+- **copy()**  
+- **with_fields(label=…, sdi=…, data=…, ssm=…)**  
+- **as_dict()**  
+- **validate(raise_on_error=False)**  
 
-- get_bit_field(lsb, msb)  
-- set_bit_field(lsb, msb, value)  
-- from_int(value, parity_type)  
-- to_int()  
-- copy()  
-- with_fields(label=..., sdi=..., data=..., ssm=...)  
-- as_dict()  
+### Bit‑field rules
 
-Parity notes:
+- All bitfields use **signed two’s‑complement** range checks.  
+- Overflow raises `FieldOverflowError`.  
+- Parity is recomputed after every write.
 
-- `parity_type` controls whether the word uses odd or even parity. The library
- - `parity_type` controls whether the word uses odd or even parity. The library
-    computes and updates the parity bit automatically whenever a bit field is
-    written (via `set_bit_field`). Use `parity_ok` to validate the stored parity
-    against the computed value. `Word.validate()` performs a parity check and will
-    raise if the parity bit does not match the configured `parity_type`.
+### Data‑field integer semantics
 
-WordBuilder parity:
+`int(BNR|BCD|Discrete)` returns the **encoded on‑wire integer**.  
+`float(...)`, `str(...)`, and `.decoded` return the semantic value.
 
-- Use `WordBuilder.parity_type(Word.EVEN_PARITY)` to fluently set parity when
-    constructing words.
+## WordBuilder
 
-Data field integer semantics:
-
-- Conversions using `int(...)` on data-field objects now return the encoded
-    integer payload (the on-wire integer), while `float(...)`/`str(...)` and
-    the `decoded` property continue to expose the semantic decoded value. This
-    makes `int(BNR|BCD|Discrete)` safe to pass into `set_bit_field` and aligns
-    the types across data-field classes.
-
-Label metadata:
-
-- `definitions.py` exposes `LabelDefinition` and sample equipment dictionaries
-    (`EQUIP_ADC`, `EQUIP_IRS`). These provide optional metadata (name, type,
-    resolution, unit) that can be used by higher-level decoding helpers. The
-    package does not automatically apply `LabelDefinition` when decoding words —
-    use the metadata as guidance for which `DataFieldType` (`BNR`, `BCD`,
-    `Discrete`) to use when interpreting the `data` and `ssm` fields.
-
-### WordBuilder
-
-Fluent builder for constructing words:
+Fluent builder for constructing words.
 
 ```python
 from arinc429.builder import WordBuilder
@@ -125,13 +96,18 @@ w = (
     .sdi(1)
     .data(0x55AA)
     .ssm(2)
+    .parity_type(Word.EVEN_PARITY)
     .build()
 )
 ```
 
-### BCD
+### Builder rules
 
-Constructor:
+- Unknown private attributes (e.g., `b._unexpected = 1`) raise `ValueError`.  
+- `FieldOverflowError` propagates.  
+- Other exceptions are wrapped in `ValueError`.  
+
+## BCD
 
 ```python
 BCD(value, resolution)
@@ -139,21 +115,19 @@ BCD(value, resolution)
 
 Attributes:
 
-- decoded  
-- encoded  
-- resolution  
-- sign  
+- **decoded**  
+- **encoded**  
+- **resolution**  
+- **sign**
 
 Methods:
 
-- decode(bcd_value, bcd_sign, resolution)  
-- copy()  
-- with_resolution(new_resolution)  
-- as_dict()  
+- **decode(bcd_value, ssm, resolution)**  
+- **copy()**  
+- **with_resolution(r)**  
+- **as_dict()**
 
-### BNR
-
-Constructor:
+## BNR
 
 ```python
 BNR(value, resolution)
@@ -161,20 +135,18 @@ BNR(value, resolution)
 
 Attributes:
 
-- decoded  
-- encoded  
-- resolution  
+- **decoded**  
+- **encoded**  
+- **resolution**
 
 Methods:
 
-- decode(bnr_value, bit_length, resolution)  
-- copy()  
-- with_resolution(new_resolution)  
-- as_dict()  
+- **decode(value, bit_length, resolution)**  
+- **copy()**  
+- **with_resolution(r)**  
+- **as_dict()**
 
-### Discrete
-
-Constructor:
+## Discrete
 
 ```python
 Discrete(value)
@@ -182,18 +154,18 @@ Discrete(value)
 
 Attributes:
 
-- decoded  
-- encoded  
+- **decoded**  
+- **encoded**
 
 Methods:
 
-- decode(value)  
-- copy()  
-- as_dict()  
+- **decode(value)**  
+- **copy()**  
+- **as_dict()**
 
-### definitions
+## definitions
 
-Optional label metadata:
+Metadata for optional label‑based decoding.
 
 ```python
 LabelDefinition(name, type, resolution, unit=None)
@@ -201,62 +173,31 @@ EQUIP_ADC
 EQUIP_IRS
 ```
 
-### loader.Arinc615Packetizer
-
-Splits a byte stream into ARINC 429 words using control labels.
-
-### williamsburg.WilliamsburgTransmitter
-
-Encodes a byte stream into Williamsburg block‑transfer words.
-
-### williamsburg.WilliamsburgReceiver
-
-Reassembles Williamsburg frames into a byte stream.
-
-## Examples
-
-### BCD
+Helper:
 
 ```python
-word = arinc429.Word()
-word.label = 0o1
-encoded = arinc429.BCD(121.5, resolution=0.1)
-word.set_bit_field(11, 29, encoded)
-decoded = arinc429.BCD.decode(word.data, word.ssm, 0.1)
+decode_word(word, definitions) -> (data_field, definition) | None
 ```
 
-### BNR
+## ARINC615 Packetizer
 
-```python
-word = arinc429.Word()
-word.label = 0o2
-encoded = arinc429.BNR(90, 0.043945313)
-word.set_bit_field(13, 29, encoded)
-word.set_bit_field(11, 12, arinc429.Discrete(1))
-decoded = arinc429.BNR.decode(
-    word.get_bit_field(bnr_field.lsb, bnr_field.msb),
-    17,
-    0.043945313
-)
-```
+- Splits a byte stream into ARINC 429 words.  
+- SOF carries payload length.  
+- DATA words carry 2 bytes each.  
+- EOF always has data field = 0.  
+- Padding is removed on decode.
 
-### Discrete
+## WilliamsburgTransmitter / WilliamsburgReceiver
 
-```python
-word = arinc429.Word()
-word.label = 0o3
-encoded = arinc429.Discrete(6)
-word.set_bit_field(11, 13, encoded)
-decoded = arinc429.Discrete.decode(word.data)
-```
+Simple SOF/DATA/EOF framing.
 
-### Williamsburg (SOF/DATA/EOF block transfer)
+Rules:
 
-The package exports both `WilliamsburgTransmitter` and `WilliamsburgReceiver` at
-the package root for convenience. These helpers implement a simple SOF/DATA/EOF
-block transfer framing for packing small byte streams into ARINC 429 words.
+- Unexpected label aborts the frame.  
+- EOF after abort returns `None`.  
+- Padding trimmed using SOF length.
 
-Example (transmit + receive):
+Example:
 
 ```python
 from arinc429 import WilliamsburgTransmitter, WilliamsburgReceiver
@@ -265,55 +206,31 @@ tx = WilliamsburgTransmitter()
 words = tx.encode(b"HELLO")
 
 rx = WilliamsburgReceiver()
-result = None
+out = None
 for w in words:
-    out = rx.process_word(w)
-    if out is not None:
-        result = out
+    r = rx.process_word(w)
+    if r is not None:
+        out = r
 
-assert result == b"HELLO"
+assert out == b"HELLO"
 ```
 
-Decoding with label metadata:
+## Decoding with metadata
 
 ```python
 from arinc429 import Word
 from arinc429.definitions import EQUIP_ADC, decode_word
 
 w = Word()
-w.label = 0o203  # Pressure Altitude in EQUIP_ADC
-# assume `w.data` contains encoded BNR for 100 feet
+w.label = 0o203
 decoded = decode_word(w, EQUIP_ADC)
-if decoded is not None:
-    data_field, definition = decoded
-    print(definition.name, float(data_field))
-else:
-    # handle missing metadata gracefully
-    print("No label metadata; decode manually using BNR/BCD/Discrete")
 ```
 
-Or using the `Word` helper:
-
-```python
-from arinc429 import Word
-from arinc429.definitions import EQUIP_ADC
-
-w = Word()
-try:
-    decoded = w.decode_by_label(EQUIP_ADC)
-except KeyError:
-    # Missing label metadata
-    decoded = None
-
-if decoded:
-    print(float(decoded))
-```
-
-Using `Word.validate()` without raising exceptions:
+## Validation
 
 ```python
 w = Word()
 errors = w.validate(raise_on_error=False)
 if errors:
-    print("Validation issues:", errors)
+    print(errors)
 ```
