@@ -21,10 +21,16 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = [
+    "pytest",
+    "pytest-cov",
+]
 
 [tool.setuptools]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 include = ["arinc429*"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=arinc429 --cov-report=term-missing"
