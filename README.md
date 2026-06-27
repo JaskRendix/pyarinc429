@@ -1,27 +1,17 @@
-# **PyARINC429**
+# PyARINC429
 
-PyARINC429 is a maintained fork of the original work by Jason Hodge.  
-It provides Python types for encoding and decoding ARINC 429 words, including:
+PyARINC429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
+It provides Python types and utilities for encoding and decoding ARINC 429 words.
 
-- BCD  
-- BNR  
-- Discrete  
-- Mixed fields  
-- Bit‑field extraction  
-- Parity computation  
-- Label bit‑reversal  
-- Optional label metadata  
-- A fluent `WordBuilder`
-
-The library targets Python 3.12 and uses type annotations.
+**Original repository:** [https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
 
 ---
 
-## **Installation**
+## Installation
 
 ```bash
-git clone https://github.com/yourusername/PyARINC429
-cd PyARINC429
+git clone https://github.com/JaskRendix/pyarinc429
+cd pyarinc429
 pip install .
 ```
 
@@ -34,7 +24,7 @@ pytest
 
 ---
 
-## **Package structure**
+## Package layout
 
 ```
 arinc429/
@@ -54,7 +44,7 @@ arinc429/
 
 ---
 
-## **Word**
+## Word
 
 Represents a 32‑bit ARINC 429 word.
 
@@ -67,18 +57,18 @@ Represents a 32‑bit ARINC 429 word.
 - **parity** — stored parity bit  
 - **parity_type** — `ODD_PARITY` or `EVEN_PARITY`  
 - **parity_ok** — computed parity check  
-- **raw** — underlying integer  
+- **raw** — underlying integer
 
 ### Methods
 
-- `get_bit_field(lsb, msb)`  
-- `set_bit_field(lsb, msb, value)`  
-- `from_int(value, parity_type)`  
-- `to_int()`  
-- `copy()`  
-- `with_fields(label=…, sdi=…, data=…, ssm=…)`  
-- `as_dict()`  
-- `validate(raise_on_error=False)`  
+- **get_bit_field**(lsb, msb)  
+- **set_bit_field**(lsb, msb, value)  
+- **from_int**(value, parity_type)  
+- **to_int**()  
+- **copy**()  
+- **with_fields**(label=…, sdi=…, data=…, ssm=…)  
+- **as_dict**()  
+- **validate**(raise_on_error=False)
 
 ### Bit‑field rules
 
@@ -88,17 +78,18 @@ Represents a 32‑bit ARINC 429 word.
 
 ### Data‑field integer semantics
 
-- `int(BNR|BCD|Discrete)` returns the encoded on‑wire integer.  
-- `float(...)`, `str(...)`, and `.decoded` return the semantic value.
+- `int(BNR|BCD|Discrete)` returns the encoded integer.  
+- `float(...)`, `str(...)`, and `.decoded` return the decoded value.
 
 ---
 
-## **WordBuilder**
+## WordBuilder
 
 Fluent builder for constructing words.
 
 ```python
 from arinc429.builder import WordBuilder
+from arinc429.word import Word
 
 w = (
     WordBuilder()
@@ -119,9 +110,9 @@ Builder rules:
 
 ---
 
-## **Data types**
+## Data types
 
-### **BCD**
+### BCD
 
 ```python
 BCD(value, resolution)
@@ -130,7 +121,7 @@ BCD(value, resolution)
 Attributes: `decoded`, `encoded`, `resolution`, `sign`  
 Methods: `decode`, `copy`, `with_resolution`, `as_dict`
 
-### **BNR**
+### BNR
 
 ```python
 BNR(value, resolution)
@@ -139,7 +130,7 @@ BNR(value, resolution)
 Attributes: `decoded`, `encoded`, `resolution`  
 Methods: `decode`, `copy`, `with_resolution`, `as_dict`
 
-### **Discrete**
+### Discrete
 
 ```python
 Discrete(value)
@@ -150,7 +141,7 @@ Methods: `decode`, `copy`, `as_dict`
 
 ---
 
-## **Label metadata**
+## Label metadata
 
 `labelinfo.py` defines:
 
@@ -161,11 +152,11 @@ get_label_info()
 require_label_info()
 ```
 
-Metadata is optional and attached to `LabelDefinition` through `attach_info()`.
+Metadata attaches to `LabelDefinition` through `attach_info()`.
 
 ---
 
-## **definitions**
+## Definitions
 
 Defines decoding schemas for known labels.
 
@@ -189,7 +180,7 @@ decode_word(word, definitions)
 
 ---
 
-## **Decoding with metadata**
+## Decoding with metadata
 
 ```python
 from arinc429 import Word
@@ -207,7 +198,7 @@ print(info.system)
 
 ---
 
-## **ARINC615 packetizer**
+## ARINC615 packetizer
 
 - Splits a byte stream into ARINC 429 words.  
 - SOF carries payload length.  
@@ -217,7 +208,7 @@ print(info.system)
 
 ---
 
-## **WilliamsburgTransmitter / WilliamsburgReceiver**
+## WilliamsburgTransmitter / WilliamsburgReceiver
 
 Simple SOF/DATA/EOF framing.
 
@@ -247,7 +238,7 @@ assert out == b"HELLO"
 
 ---
 
-## **Validation**
+## Validation
 
 ```python
 w = Word()
