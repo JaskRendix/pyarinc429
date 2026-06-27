@@ -1,5 +1,7 @@
 import pytest
 
+from arinc429.bitfields import DATA_BITS
+from arinc429.definitions import EQUIP_ADC
 from arinc429.errors import FieldOverflowError
 from arinc429.word import Word
 
@@ -34,7 +36,7 @@ def test_word_label_set_and_get():
 def test_word_label_invalid_raises():
     w = Word()
     with pytest.raises(ValueError):
-        w.label = 0o777  # outside ARINC 429 label range
+        w.label = 0o777  # invalid ARINC label
 
 
 def test_word_sdi_valid():
@@ -63,7 +65,7 @@ def test_word_ssm_invalid_raises():
 
 def test_word_data_valid():
     w = Word()
-    w.data = (1 << 19) - 1  # max 19-bit value
+    w.data = (1 << 19) - 1
     assert w.data == 0x7FFFF
 
 
@@ -81,16 +83,13 @@ def test_word_parity_ok_property():
 def test_word_parity_changes_with_parity_type():
     w = Word(0x12345678, parity_type=Word.ODD_PARITY)
     odd_parity = w.parity
-
     w.parity_type = Word.EVEN_PARITY
     even_parity = w.parity
-
     assert odd_parity != even_parity
 
 
 def test_word_parity_bit_count_optimization():
     w = Word(0xFFFFFFFF)
-    # parity_ok must still be correct even with bit_count optimization
     assert w.parity_ok in (True, False)
 
 
@@ -131,6 +130,16 @@ def test_word_as_dict_contains_all_fields():
     }
 
 
+def test_word_repr_and_format_and_str():
+    w = Word.from_int(0x12345678)
+    assert "Word(" in repr(w)
+    assert format(w, "x") == format(0x12345678, "x")
+    s = str(w)
+    assert "Label=" in s
+    assert "SDI=" in s
+    assert "SSM=" in s
+
+
 def test_word_get_bit_field_valid():
     w = Word(0xFFFFFFFF)
     assert w.get_bit_field(1, 32) in (0x7FFFFFFF, 0xFFFFFFFF)
@@ -163,7 +172,82 @@ def test_word_set_bit_field_invalid_range():
 def test_word_set_bit_field_invalid_bit_length():
     w = Word()
     with pytest.raises(FieldOverflowError):
-        w.set_bit_field(11, 12, 0xFF)  # too large for 2 bits
+        w.set_bit_field(11, 12, 0xFF)
+
+
+def test_word_set_bit_field_accepts_DataFieldType():
+    from arinc429.datatypes.base import DataFieldType
+
+    class DummyType(DataFieldType):
+        def __int__(self):
+            return 5
+
+        @staticmethod
+        def decode(*args, **kwargs):
+            return 5
+
+    w = Word()
+    w.set_bit_field(*DATA_BITS, DummyType())
+    assert w.data == 5
+
+
+def test_set_raw_preserving_parity_recomputes_correct_parity():
+    w = Word()
+    w._set_raw_preserving_parity(0x12345678)
+
+    count = (0x12345678 & ((1 << 31) - 1)).bit_count()
+    expected = (count + w.parity_type) % 2
+
+    assert w.parity == expected
+
+
+def test_recompute_parity_is_deterministic():
+    w = Word.from_int(0x00000000)
+    before = w.parity
+    w._recompute_parity()
+    after = w.parity
+    assert before == after
+
+
+def test_decode_with_definition_unknown_field_type_skipped():
+    class FakeField:
+        name = "x"
+        lsb = 11
+        msb = 12
+        type = "UNKNOWN"
+        resolution = None
+        width = 2
+
+    class FakeDef:
+        fields = (FakeField(),)
+
+    w = Word()
+    decoded = w.decode_with_definition(FakeDef())
+    assert decoded == {}
+
+
+def test_decode_by_label_unknown_label():
+    w = Word()
+    w.label = 0o001  # valid but not in EQUIP_ADC
+    with pytest.raises(KeyError):
+        w.decode_by_label(EQUIP_ADC)
+
+
+def test_validate_against_calls_definition():
+    class FakeDef:
+        def validate_word(self, word):
+            return ["err1", "err2"]
+
+    w = Word()
+    assert w.validate_against(FakeDef()) == ["err1", "err2"]
+
+
+def test_validate_by_label_unknown_label_returns_error_list():
+    w = Word()
+    w.label = 0o001  # valid but unknown
+    errors = w.validate_by_label(EQUIP_ADC)
+    assert len(errors) == 1
+    assert "not in definitions" in errors[0]
 
 
 def test_word_validate_noop():

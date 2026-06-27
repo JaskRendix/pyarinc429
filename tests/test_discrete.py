@@ -1,75 +1,144 @@
 import pytest
 
-from arinc429.arinc429 import Discrete
-
-
-@pytest.mark.parametrize("value", [0, 1, 5, 7, 123])
-def test_discrete_basic_int_and_str(value):
-    d = Discrete(value)
-    assert int(d) == value
-    assert str(d) == str(value)
-
-
-def test_discrete_repr_contains_hex():
-    d = Discrete(3)
-    r = repr(d)
-    assert "Discrete" in r
-    assert "0x" in r
-
-
-@pytest.mark.parametrize("value", [0, 1, 3, 7, 15])
-def test_discrete_hash_matches_value(value):
-    d = Discrete(value)
-    assert hash(d) == hash(value)
+from arinc429.datatypes.discrete import Discrete
 
 
 @pytest.mark.parametrize(
-    "value,expected_bytes",
+    "value,decoded,encoded,name",
     [
-        (0x00000000, b"\x00\x00\x00\x00"),
-        (0x00000001, b"\x00\x00\x00\x01"),
-        (0x12345678, b"\x12\x34\x56\x78"),
-        (0xFFFFFFFF, b"\xFF\xFF\xFF\xFF"),
+        (0, 0, 0, "NORMAL_OPERATION"),
+        (1, 1, 1, "NO_COMPUTED_DATA"),
+        (2, 2, 2, "FUNCTIONAL_TEST"),
+        (3, 3, 3, "FAILURE_WARNING"),
+        (4, 4, 4, "UNKNOWN"),
+        (99, 99, 99, "UNKNOWN"),
+        (-1, -1, -1, "UNKNOWN"),
     ],
 )
-def test_discrete_bytes_big_endian(value, expected_bytes):
+def test_discrete_decoded_encoded_name(value, decoded, encoded, name):
     d = Discrete(value)
-    assert bytes(d) == expected_bytes
+    assert d.decoded == decoded
+    assert d.encoded == encoded
+    assert d.name == name
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (0, True),
+        (1, True),
+        (2, True),
+        (3, True),
+        (4, False),
+        (10, False),
+        (-1, False),
+    ],
+)
+def test_discrete_is_valid(value, expected):
+    assert Discrete(value).is_valid() == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (0, 0),
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (4, 0),  # 4 & 3 = 0
+        (5, 1),  # 5 & 3 = 1
+        (6, 2),  # 6 & 3 = 2
+        (7, 3),  # 7 & 3 = 3
+        (255, 3),  # 255 & 3 = 3
+    ],
+)
+def test_discrete_clamp(value, expected):
+    d = Discrete(value).clamp()
+    assert isinstance(d, Discrete)
+    assert int(d) == expected
+
+
+@pytest.mark.parametrize(
+    "value,width,expected",
+    [
+        (0b1010, 2, 0b10),
+        (0b1010, 3, 0b010),
+        (0b1010, 4, 0b1010),
+        (0b1111, 1, 0b1),
+        (0b1111, 8, 0b1111),
+    ],
+)
+def test_discrete_to_bits(value, width, expected):
+    d = Discrete(value)
+    assert d.to_bits(width) == expected
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("NORMAL_OPERATION", 0),
+        ("NO_COMPUTED_DATA", 1),
+        ("FUNCTIONAL_TEST", 2),
+        ("FAILURE_WARNING", 3),
+    ],
+)
+def test_discrete_from_name(name, value):
+    d = Discrete.from_name(name)
+    assert isinstance(d, Discrete)
+    assert int(d) == value
+
+
+def test_discrete_from_name_invalid():
+    with pytest.raises(KeyError):
+        Discrete.from_name("NOT_A_REAL_NAME")
 
 
 def test_discrete_copy_independent():
     d1 = Discrete(2)
     d2 = d1.copy()
-    assert int(d1) == int(d2)
     assert d1 is not d2
+    assert int(d1) == int(d2)
 
 
-@pytest.mark.parametrize("value", [0, 1, 7, 9, 255])
-def test_discrete_decode_round_trip(value):
-    d = Discrete.decode(value)
-    assert isinstance(d, Discrete)
-    assert int(d) == value
+def test_discrete_as_dict():
+    d = Discrete(2)
+    dct = d.as_dict()
+    assert dct["type"] == "Discrete"
+    assert dct["encoded"] == 2
+    assert dct["decoded"] == 2
+    assert dct["name"] == "FUNCTIONAL_TEST"
 
 
 @pytest.mark.parametrize(
-    "value,expected_len",
+    "value,expected",
     [
         (0, 0),
         (1, 1),
-        (0b10110, 5),
-        (0xFFFF, 16),
-        (0xFFFFFFFF, 32),
+        (2, 2),
+        (3, 2),
+        (4, 3),
+        (255, 8),
     ],
 )
-def test_discrete_bit_length(value, expected_len):
-    d = Discrete(value)
-    assert d.bit_length() == expected_len
+def test_discrete_bit_length(value, expected):
+    assert Discrete(value).bit_length() == expected
 
 
-@pytest.mark.parametrize("value", [0, 1, 2, 3, 10])
-def test_discrete_as_dict_structure(value):
-    d = Discrete(value)
-    dct = d.as_dict()
-    assert dct["type"] == "Discrete"
-    assert dct["encoded"] == value
-    assert dct["decoded"] == value
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (0, b"\x00\x00\x00\x00"),
+        (1, b"\x00\x00\x00\x01"),
+        (0x12345678, b"\x12\x34\x56\x78"),
+        (0xFFFFFFFF, b"\xFF\xFF\xFF\xFF"),
+    ],
+)
+def test_discrete_bytes(value, expected):
+    assert bytes(Discrete(value)) == expected
+
+
+def test_discrete_repr_and_str():
+    d = Discrete(3)
+    assert "Discrete" in repr(d)
+    assert "0x" in repr(d)
+    assert str(d) == "3"

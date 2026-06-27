@@ -22,6 +22,9 @@ class BNR(DataFieldType):
         value = Decimal(str(value))
         resolution = Decimal(str(resolution))
 
+        if resolution <= 0:
+            raise ValueError("BNR resolution must be positive")
+
         bnr_value = value // resolution
         super().__init__(bnr_value)
 
