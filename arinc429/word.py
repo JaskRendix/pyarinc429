@@ -227,28 +227,38 @@ class Word:
         # Set parity bit
         self._value |= parity_bit << parity_offset
 
-    def decode_with_definition(self, definition) -> DataFieldType | None:
+    def decode_with_definition(self, definition):
+        """
+        Decode this ARINC 429 word using a multi-field LabelDefinition.
+        Returns a dict of field_name → decoded_value.
+        """
+
         from .datatypes.bcd import BCD
         from .datatypes.bnr import BNR
         from .datatypes.discrete import Discrete
 
-        data_val = self.data
+        decoded_fields = {}
 
-        if definition.type == "BNR":
-            bit_length = DATA_BITS.msb - DATA_BITS.lsb + 1
-            return BNR.decode(data_val, bit_length, definition.resolution)
+        for field in definition.fields:
+            raw = self.get_bit_field(field.lsb, field.msb)
 
-        if definition.type == "BCD":
-            return BCD.decode(data_val, self.ssm, definition.resolution)
+            if field.type == "BNR":
+                decoded = BNR.decode(raw, field.width, field.resolution)
+            elif field.type == "BCD":
+                decoded = BCD.decode(raw, self.ssm, field.resolution)
+            elif field.type == "DISCRETE":
+                decoded = Discrete.decode(raw)
+            else:
+                continue
 
-        if definition.type == "DISCRETE":
-            return Discrete.decode(data_val)
+            decoded_fields[field.name] = decoded
 
-        return None
+        return decoded_fields
 
-    def decode_by_label(self, definitions: dict[int, Any]) -> DataFieldType | None:
+    def decode_by_label(self, definitions: dict[int, Any]):
         try:
             definition = definitions[self.label]
         except KeyError:
             raise KeyError(f"Label {self.label:#o} not present in definitions")
+
         return self.decode_with_definition(definition)
