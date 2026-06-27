@@ -250,3 +250,13 @@ class Word:
             raise KeyError(f"Label {self.label:#o} not present in definitions")
 
         return self.decode_with_definition(definition)
+
+    def validate_against(self, definition) -> list[str]:
+        return definition.validate_word(self)
+
+    def validate_by_label(self, definitions) -> list[str]:
+        try:
+            definition = definitions[self.label]
+        except KeyError:
+            return [f"Label {self.label:#o} not in definitions"]
+        return self.validate_against(definition)

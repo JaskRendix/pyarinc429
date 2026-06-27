@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
+from arinc429.bitfields import DATA_BITS
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
+from arinc429.word import Word
 
 DataTypeName = Literal["BNR", "BCD", "DISCRETE"]
 
@@ -29,12 +31,21 @@ class LabelDefinition:
     fields: tuple[FieldDefinition, ...]
     info: LabelInfo | None = None
 
+    def validate_word(self, word: Word) -> list[str]:
+        errors: list[str] = []
+
+        for field in self.fields:
+            errors.extend(validate_field(word, field))
+
+        errors.extend(validate_label_structure(self))
+
+        if self.info:
+            errors.extend(validate_metadata(word, self.info))
+
+        return errors
+
 
 def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
-    """
-    Attach LabelInfo metadata to each LabelDefinition automatically.
-    Returns a new dictionary with updated LabelDefinition objects.
-    """
     out: dict[int, LabelDefinition] = {}
 
     for lbl, defn in defs.items():
@@ -48,20 +59,15 @@ def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
 
 
 def decode_word(
-    word, definitions
+    word: Word,
+    definitions,
 ) -> tuple[dict, LabelDefinition, LabelInfo | None] | None:
-    """
-    Decode a Word using the provided label definitions.
-    Returns (decoded_fields, LabelDefinition, LabelInfo | None)
-    or None if label is unknown.
-    """
 
     try:
         definition: LabelDefinition = definitions[word.label]
     except KeyError:
         return None
 
-    # Lazy imports to avoid cycles
     from .datatypes.bcd import BCD
     from .datatypes.bnr import BNR
     from .datatypes.discrete import Discrete
@@ -82,8 +88,53 @@ def decode_word(
 
         decoded_fields[field.name] = decoded
 
-    # Return metadata explicitly as the third element
     return decoded_fields, definition, definition.info
+
+
+def _is_valid_bcd(raw: int) -> bool:
+    while raw:
+        if (raw & 0xF) > 9:
+            return False
+        raw >>= 4
+    return True
+
+
+def validate_field(word: Word, field: FieldDefinition) -> list[str]:
+    errors: list[str] = []
+
+    if field.lsb < DATA_BITS.lsb or field.msb > DATA_BITS.msb:
+        errors.append(f"Field {field.name} out of DATA range")
+
+    if field.type in ("BNR", "BCD") and field.resolution is None:
+        errors.append(f"Field {field.name} missing resolution")
+
+    raw = word.get_bit_field(field.lsb, field.msb)
+
+    if field.type == "BCD" and not _is_valid_bcd(raw):
+        errors.append(f"Field {field.name} contains invalid BCD digits")
+
+    return errors
+
+
+def validate_label_structure(defn: LabelDefinition) -> list[str]:
+    errors: list[str] = []
+
+    ranges = [(f.lsb, f.msb, f.name) for f in defn.fields]
+
+    for i, (lsb1, msb1, name1) in enumerate(ranges):
+        for lsb2, msb2, name2 in ranges[i + 1 :]:
+            if not (msb1 < lsb2 or msb2 < lsb1):
+                errors.append(f"Fields {name1} and {name2} overlap")
+
+    names = [f.name for f in defn.fields]
+    if len(names) != len(set(names)):
+        errors.append("Duplicate field names")
+
+    return errors
+
+
+def validate_metadata(word: Word, info: LabelInfo) -> list[str]:
+    return []
 
 
 _RAW_EQUIP_ADC: dict[int, LabelDefinition] = {
@@ -144,6 +195,5 @@ _RAW_EQUIP_IRS: dict[int, LabelDefinition] = {
     ),
 }
 
-# Attach metadata automatically
 EQUIP_ADC = attach_info(_RAW_EQUIP_ADC)
 EQUIP_IRS = attach_info(_RAW_EQUIP_IRS)
