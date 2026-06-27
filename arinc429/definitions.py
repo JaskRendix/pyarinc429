@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-
 DataTypeName = Literal["BNR", "BCD", "DISCRETE"]
 
 
