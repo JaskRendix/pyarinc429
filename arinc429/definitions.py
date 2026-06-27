@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
+from arinc429.labelinfo import LABEL_INFO, LabelInfo
+
 DataTypeName = Literal["BNR", "BCD", "DISCRETE"]
 
 
@@ -25,11 +27,37 @@ class FieldDefinition:
 class LabelDefinition:
     name: str
     fields: tuple[FieldDefinition, ...]
+    info: LabelInfo | None = None
 
 
-def decode_word(word, definitions) -> tuple[dict, LabelDefinition] | None:
+def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
+    """
+    Attach LabelInfo metadata to each LabelDefinition automatically.
+    Returns a new dictionary with updated LabelDefinition objects.
+    """
+    out: dict[int, LabelDefinition] = {}
+
+    for lbl, defn in defs.items():
+        out[lbl] = LabelDefinition(
+            name=defn.name,
+            fields=defn.fields,
+            info=LABEL_INFO.get(lbl),
+        )
+
+    return out
+
+
+def decode_word(
+    word, definitions
+) -> tuple[dict, LabelDefinition, LabelInfo | None] | None:
+    """
+    Decode a Word using the provided label definitions.
+    Returns (decoded_fields, LabelDefinition, LabelInfo | None)
+    or None if label is unknown.
+    """
+
     try:
-        definition = definitions[word.label]
+        definition: LabelDefinition = definitions[word.label]
     except KeyError:
         return None
 
@@ -54,10 +82,11 @@ def decode_word(word, definitions) -> tuple[dict, LabelDefinition] | None:
 
         decoded_fields[field.name] = decoded
 
-    return decoded_fields, definition
+    # Return metadata explicitly as the third element
+    return decoded_fields, definition, definition.info
 
 
-EQUIP_ADC: dict[int, LabelDefinition] = {
+_RAW_EQUIP_ADC: dict[int, LabelDefinition] = {
     0o203: LabelDefinition(
         name="Pressure Altitude",
         fields=(
@@ -86,7 +115,7 @@ EQUIP_ADC: dict[int, LabelDefinition] = {
     ),
 }
 
-EQUIP_IRS: dict[int, LabelDefinition] = {
+_RAW_EQUIP_IRS: dict[int, LabelDefinition] = {
     0o310: LabelDefinition(
         name="Present Latitude",
         fields=(
@@ -114,3 +143,7 @@ EQUIP_IRS: dict[int, LabelDefinition] = {
         ),
     ),
 }
+
+# Attach metadata automatically
+EQUIP_ADC = attach_info(_RAW_EQUIP_ADC)
+EQUIP_IRS = attach_info(_RAW_EQUIP_IRS)
