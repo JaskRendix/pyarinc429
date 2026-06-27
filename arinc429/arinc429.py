@@ -1,7 +1,5 @@
 from .bitfields import (
     DATA_BITS,
-    DECODE_LABEL,
-    ENCODE_LABEL,
     LABEL_BITS,
     LSB,
     MSB,
@@ -26,8 +24,6 @@ __all__ = [
     "DATA_BITS",
     "SSM_BITS",
     "PARITY_BIT",
-    "ENCODE_LABEL",
-    "DECODE_LABEL",
     "ARINC429Error",
     "FieldOverflowError",
     "DataFieldType",

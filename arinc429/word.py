@@ -2,19 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .bitfields import (
-    DATA_BITS,
-    DECODE_LABEL,
-    ENCODE_LABEL,
-    LABEL_BITS,
-    LSB,
-    MSB,
-    PARITY_BIT,
-    SDI_BITS,
-    SSM_BITS,
-)
+from .bitfields import DATA_BITS, LABEL_BITS, LSB, MSB, PARITY_BIT, SDI_BITS, SSM_BITS
 from .datatypes.base import DataFieldType
 from .errors import FieldOverflowError
+from .labels import decode_label, encode_label
 
 
 class Word:
@@ -81,14 +72,11 @@ class Word:
     @property
     def label(self) -> int:
         wire = self.get_bit_field(*LABEL_BITS)
-        return DECODE_LABEL[wire]
+        return decode_label(wire)
 
     @label.setter
     def label(self, value: int) -> None:
-        try:
-            encoded = ENCODE_LABEL[value]
-        except KeyError:
-            raise ValueError(f"Invalid ARINC 429 label: {value:#o}")
+        encoded = encode_label(value)
         self.set_bit_field(*LABEL_BITS, encoded)
 
     @property

@@ -23,11 +23,3 @@ SDI_BITS = BitFieldRange(9, 10)
 DATA_BITS = BitFieldRange(11, 29)
 SSM_BITS = BitFieldRange(30, 31)
 PARITY_BIT = MSB
-
-
-# ENCODE_LABEL: octal label → bit‑reversed wire value
-# DECODE_LABEL: wire value → octal label
-
-ENCODE_LABEL = {lbl: int(format(lbl, "08b")[::-1], 2) for lbl in range(0o000, 0o400)}
-
-DECODE_LABEL = {wire: lbl for lbl, wire in ENCODE_LABEL.items()}
