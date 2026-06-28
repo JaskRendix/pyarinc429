@@ -58,6 +58,14 @@ class Word:
             f"SSM={self.ssm}, Parity={self.parity}"
         )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Word):
+            return NotImplemented
+        return self._value == other._value and self._parity_type == other._parity_type
+
+    def __hash__(self) -> int:
+        return hash((self._value, self._parity_type))
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "label": self.label,
@@ -68,6 +76,30 @@ class Word:
             "parity_type": self.parity_type,
             "raw": self._value,
         }
+
+    def to_binary_str(self) -> str:
+        """Return the 32-bit word as an MSB-first '0'/'1' string, bit 32 first."""
+        return f"{self._value:032b}"
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Word:
+        """
+        Build a Word from a dict shaped like as_dict()'s output.
+
+        Only label/sdi/data/ssm/parity_type are honored when present;
+        'raw' and 'parity' are ignored since they are derived, not inputs.
+        Missing keys fall back to a zeroed word with ODD_PARITY.
+        """
+        w = cls(0, d.get("parity_type", cls.ODD_PARITY))
+        if "label" in d:
+            w.label = d["label"]
+        if "sdi" in d:
+            w.sdi = d["sdi"]
+        if "data" in d:
+            w.data = d["data"]
+        if "ssm" in d:
+            w.ssm = d["ssm"]
+        return w
 
     @property
     def label(self) -> int:
@@ -168,7 +200,7 @@ class Word:
 
         if raise_on_error:
             if errors:
-                raise ValueError(errors[0])
+                raise ValueError("; ".join(errors))
             return None
         return errors
 
@@ -215,10 +247,17 @@ class Word:
         # Set parity bit
         self._value |= parity_bit << parity_offset
 
-    def decode_with_definition(self, definition):
+    def decode_with_definition(self, definition, report_unknown: bool = False):
         """
         Decode this ARINC 429 word using a multi-field LabelDefinition.
-        Returns a dict of field_name → decoded_value.
+
+        By default returns a dict of field_name -> decoded_value, matching
+        prior behavior exactly (unknown field types are silently skipped).
+
+        If report_unknown=True, returns a tuple
+            (decoded_fields, unknown_field_names)
+        instead, so callers can detect definitions referencing field types
+        this version of the library doesn't know how to decode.
         """
 
         from .datatypes.bcd import BCD
@@ -226,6 +265,7 @@ class Word:
         from .datatypes.discrete import Discrete
 
         decoded_fields = {}
+        unknown_fields: list[str] = []
 
         for field in definition.fields:
             raw = self.get_bit_field(field.lsb, field.msb)
@@ -237,17 +277,21 @@ class Word:
             elif field.type == "DISCRETE":
                 decoded = Discrete.decode(raw)
             else:
+                unknown_fields.append(field.name)
                 continue
 
             decoded_fields[field.name] = decoded
 
+        if report_unknown:
+            return decoded_fields, unknown_fields
         return decoded_fields
 
     def decode_by_label(self, definitions: dict[int, Any]):
+        label = self.label  # raises ValueError via decode_label if wire is malformed
         try:
-            definition = definitions[self.label]
+            definition = definitions[label]
         except KeyError:
-            raise KeyError(f"Label {self.label:#o} not present in definitions")
+            raise KeyError(f"Label {label:#o} not present in definitions")
 
         return self.decode_with_definition(definition)
 
