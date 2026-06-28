@@ -15,6 +15,8 @@ class Word:
     ODD_PARITY = 1
 
     def __init__(self, value: int = 0, parity_type: int = ODD_PARITY) -> None:
+        if parity_type not in (self.EVEN_PARITY, self.ODD_PARITY):
+            raise ValueError(f"Invalid parity type: {parity_type}")
         self._value = 0
         self._parity_type = parity_type
         self._set_raw_preserving_parity(value)

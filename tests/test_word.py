@@ -391,3 +391,19 @@ def test_decode_with_definition_report_unknown_false_matches_default():
     w = Word()
     result = w.decode_with_definition(FakeDef(), report_unknown=False)
     assert result == w.decode_with_definition(FakeDef())
+
+
+def test_word_init_invalid_parity_type_raises():
+    with pytest.raises(ValueError):
+        Word(0, 99)
+
+
+def test_word_from_int_invalid_parity_type_raises():
+    with pytest.raises(ValueError):
+        Word.from_int(0, 99)
+
+
+def test_word_init_valid_parity_types_do_not_raise():
+    Word(0, Word.EVEN_PARITY)
+    Word(0, Word.ODD_PARITY)
+    Word()  # default
