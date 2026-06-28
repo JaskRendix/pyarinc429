@@ -39,16 +39,17 @@ class WordBuilder:
         return self
 
     def build(self) -> Word:
-        # Detect accidental private attributes
+
         unknowns = [
             name
             for name in self.__dict__
-            if name.startswith("_")
-            and name not in self._allowed_fields
-            and getattr(self, name) is not None
+            if name.startswith("_") and name not in self._allowed_fields
         ]
         if unknowns:
             raise ValueError(f"Unknown builder fields present: {unknowns}")
+
+        if self._parity_type not in (Word.EVEN_PARITY, Word.ODD_PARITY):
+            raise ValueError(f"Invalid parity type: {self._parity_type}")
 
         w = Word(0, self._parity_type)
 

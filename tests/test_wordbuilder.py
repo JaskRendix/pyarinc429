@@ -109,3 +109,47 @@ def test_builder_invalid_ssm_raises():
 def test_builder_invalid_data_raises():
     with pytest.raises(Exception):
         WordBuilder().data(-999999999999999).build()
+
+
+def test_builder_parity_type_setter():
+    b = WordBuilder().parity_type(Word.EVEN_PARITY)
+    w = b.build()
+    assert w.parity_type == Word.EVEN_PARITY
+
+
+def test_builder_unknown_field_raises():
+    b = WordBuilder()
+    # Simulate accidental private attribute added by user code
+    b._unexpected = 1
+    with pytest.raises(ValueError):
+        b.build()
+
+
+def test_builder_invalid_value_raises_with_context():
+    b = WordBuilder().sdi(99)
+    with pytest.raises(FieldOverflowError):
+        b.build()
+
+
+def test_builder_invalid_parity_type_raises():
+    with pytest.raises(ValueError):
+        WordBuilder(parity_type=99).build()
+
+
+def test_builder_invalid_parity_type_via_setter_raises():
+    with pytest.raises(ValueError):
+        WordBuilder().parity_type(99).build()
+
+
+def test_builder_unknown_field_none_value_raises():
+    b = WordBuilder()
+    b._unexpected = None
+    with pytest.raises(ValueError):
+        b.build()
+
+
+def test_builder_valid_parity_types_do_not_raise():
+    WordBuilder(parity_type=Word.EVEN_PARITY).build()
+    WordBuilder(parity_type=Word.ODD_PARITY).build()
+    WordBuilder().parity_type(Word.EVEN_PARITY).build()
+    WordBuilder().parity_type(Word.ODD_PARITY).build()

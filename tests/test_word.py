@@ -253,6 +253,8 @@ def test_validate_by_label_unknown_label_returns_error_list():
 def test_word_validate_noop():
     w = Word()
     assert w.validate() is None
+
+
 def test_word_eq_same_value_and_parity_type():
     w1 = Word(0x12345678, parity_type=Word.ODD_PARITY)
     w2 = Word(0x12345678, parity_type=Word.ODD_PARITY)
@@ -345,7 +347,7 @@ def test_validate_collects_multiple_errors_joined():
     w.set_bit_field(9, 10, 3)  # valid SDI, just to set up raw bits directly
     # Force SSM and parity both invalid by writing raw bits directly,
     # bypassing the property setters' own validation.
-    w._value |= (0b11 << 29)  # SSM bits -> still in-range (0-3), so flip parity instead
+    w._value |= 0b11 << 29  # SSM bits -> still in-range (0-3), so flip parity instead
     object.__setattr__(w, "_value", w._value ^ (1 << 31))  # corrupt parity bit
 
     errors = w.validate(raise_on_error=False)
