@@ -31,6 +31,10 @@ class LabelDefinition:
     fields: tuple[FieldDefinition, ...]
     info: LabelInfo | None = None
 
+    @property
+    def field_names(self) -> tuple[str, ...]:
+        return tuple(f.name for f in self.fields)
+
     def validate_word(self, word: Word) -> list[str]:
         errors: list[str] = []
 
@@ -61,7 +65,21 @@ def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
 def decode_word(
     word: Word,
     definitions,
+    report_unknown: bool = False,
 ) -> tuple[dict, LabelDefinition, LabelInfo | None] | None:
+    """
+    Decode a word using a label -> LabelDefinition mapping.
+
+    Returns None if the word's label is not present in `definitions`.
+
+    By default returns (decoded_fields, definition, info), matching prior
+    behavior exactly (unknown field types are silently skipped).
+
+    If report_unknown=True, returns
+        (decoded_fields, definition, info, unknown_field_names)
+    instead, so callers can detect definitions referencing field types
+    this version of the library doesn't know how to decode.
+    """
 
     try:
         definition: LabelDefinition = definitions[word.label]
@@ -73,6 +91,7 @@ def decode_word(
     from .datatypes.discrete import Discrete
 
     decoded_fields: dict[str, object] = {}
+    unknown_fields: list[str] = []
 
     for field in definition.fields:
         raw = word.get_bit_field(field.lsb, field.msb)
@@ -84,10 +103,13 @@ def decode_word(
         elif field.type == "DISCRETE":
             decoded = Discrete.decode(raw)
         else:
+            unknown_fields.append(field.name)
             continue
 
         decoded_fields[field.name] = decoded
 
+    if report_unknown:
+        return decoded_fields, definition, definition.info, unknown_fields
     return decoded_fields, definition, definition.info
 
 
@@ -134,7 +156,18 @@ def validate_label_structure(defn: LabelDefinition) -> list[str]:
 
 
 def validate_metadata(word: Word, info: LabelInfo) -> list[str]:
-    return []
+    """
+    Cross-check the word's actual label against the label recorded in its
+    attached LabelInfo. A mismatch means a LabelDefinition was built with
+    info for the wrong label -- a wiring bug, not a malformed word.
+    """
+    errors: list[str] = []
+    if word.label != info.label:
+        errors.append(
+            f"Word label {word.label:#o} does not match "
+            f"LabelInfo.label {info.label:#o}"
+        )
+    return errors
 
 
 _RAW_EQUIP_ADC: dict[int, LabelDefinition] = {

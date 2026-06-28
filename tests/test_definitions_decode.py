@@ -2,7 +2,14 @@ from decimal import Decimal
 
 from arinc429 import Word
 from arinc429.datatypes.bnr import BNR
-from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, decode_word
+from arinc429.definitions import (
+    EQUIP_ADC,
+    EQUIP_IRS,
+    FieldDefinition,
+    LabelDefinition,
+    decode_word,
+    validate_metadata,
+)
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
 
 
@@ -91,3 +98,101 @@ def test_decode_word_field_decoding_with_metadata():
 
     assert isinstance(info, LabelInfo)
     assert info.name == "Pressure Altitude"
+
+
+def test_validate_metadata_no_false_positive_on_equip_adc():
+    w = Word()
+    w.label = 0o203
+    assert EQUIP_ADC[0o203].validate_word(w) == []
+
+
+def test_validate_metadata_no_false_positive_on_equip_irs():
+    w = Word()
+    w.label = 0o310
+    assert EQUIP_IRS[0o310].validate_word(w) == []
+
+
+def test_validate_metadata_detects_label_mismatch():
+    mismatched = LabelDefinition(
+        name="Mismatched",
+        fields=(FieldDefinition("x", 11, 29, "BNR", Decimal("1.0")),),
+        info=LabelInfo(label=0o310, name="Wrong", system="X", category="Y"),
+    )
+    w = Word()
+    w.label = 0o203  # different from info.label above
+    errors = mismatched.validate_word(w)
+    assert any("does not match" in e for e in errors)
+
+
+def test_validate_metadata_directly():
+    info = LabelInfo(label=0o203, name="x", system="ADC", category="Air Data")
+    w = Word()
+    w.label = 0o203
+    assert validate_metadata(w, info) == []
+
+    w.label = 0o210
+    errors = validate_metadata(w, info)
+    assert len(errors) == 1
+    assert "0o210" in errors[0]
+    assert "0o203" in errors[0]
+
+
+def test_validate_word_skips_metadata_when_info_is_none():
+    no_info_def = LabelDefinition(
+        name="NoInfo",
+        fields=(FieldDefinition("x", 11, 29, "BNR", Decimal("1.0")),),
+    )
+    w = Word()
+    w.label = 0o001
+    # Should not raise or attempt a metadata check when info is None
+    assert no_info_def.validate_word(w) == []
+
+
+def test_labeldefinition_field_names():
+    assert EQUIP_ADC[0o203].field_names == ("altitude",)
+    assert EQUIP_IRS[0o310].field_names == ("latitude",)
+
+
+def test_labeldefinition_field_names_multiple_fields():
+    ld = LabelDefinition(
+        name="Multi",
+        fields=(
+            FieldDefinition("a", 11, 15, "DISCRETE"),
+            FieldDefinition("b", 16, 29, "BNR", Decimal("1.0")),
+        ),
+    )
+    assert ld.field_names == ("a", "b")
+
+
+def test_decode_word_report_unknown_false_matches_default_shape():
+    w = Word()
+    w.label = 0o203
+    w.data = BNR(100, Decimal("1.0"))
+    default_result = decode_word(w, EQUIP_ADC)
+    explicit_false_result = decode_word(w, EQUIP_ADC, report_unknown=False)
+    assert default_result == explicit_false_result
+    assert len(default_result) == 3
+
+
+def test_decode_word_report_unknown_true_returns_four_tuple():
+    weird_def = {
+        0o203: LabelDefinition(
+            name="Weird",
+            fields=(FieldDefinition("mystery", 11, 12, "FUTURE_TYPE"),),
+        )
+    }
+    w = Word()
+    w.label = 0o203
+    decoded, definition, info, unknown = decode_word(w, weird_def, report_unknown=True)
+    assert decoded == {}
+    assert unknown == ["mystery"]
+    assert definition.name == "Weird"
+
+
+def test_decode_word_report_unknown_true_no_unknown_fields():
+    w = Word()
+    w.label = 0o203
+    w.data = BNR(100, Decimal("1.0"))
+    decoded, definition, info, unknown = decode_word(w, EQUIP_ADC, report_unknown=True)
+    assert unknown == []
+    assert "altitude" in decoded
