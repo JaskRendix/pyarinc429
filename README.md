@@ -200,11 +200,43 @@ print(info.system)
 
 ## ARINC615 packetizer
 
-- Splits a byte stream into ARINC 429 words.  
-- SOF carries payload length.  
-- DATA words carry 2 bytes.  
-- EOF has data field = 0.  
-- Padding is removed on decode.
+A simplified model of ARINC 615 framing: no sequence counters, no
+checksums, no load-list metadata. Real ARINC 615 includes these; this
+class exists for basic byte-stream chunking into ARINC 429 words.
+
+- `to_words()` splits a byte stream into ARINC 429 words: a leading SOF
+  word, followed by DATA words, followed by a single EOF word.
+- The SOF word (label `CONTROL_LABEL_SOF`) carries the exact payload
+  length in its data field, so the original length can be recovered
+  precisely on decode rather than guessed from padding. Payloads larger
+  than `MAX_SOF_LENGTH` bytes raise `ValueError`, since the length
+  wouldn't fit in the 19-bit field.
+- DATA words (label `CONTROL_LABEL_DATA`) carry 2 bytes each, big-endian.
+  The final block is zero-padded on the right if the input length isn't
+  a multiple of 2.
+- The EOF word (label `CONTROL_LABEL_EOF`) has a zero data field.
+- `decode(words)` reconstructs the original payload from a list of
+  words: it reads the length from the first SOF word seen (later SOF
+  words, if any, are ignored), concatenates the data field of every
+  DATA-labeled word in order, and trims the result to exactly that
+  length. Non-DATA, non-SOF words (EOF, or any unexpected/corrupted
+  word) are ignored.
+- If no SOF word is present in the list (e.g. a hand-built or legacy
+  word list), `decode()` falls back to stripping trailing null bytes.
+  This fallback has the original limitation: a payload that itself ends
+  in null bytes will have those bytes stripped too. This only applies
+  to the no-SOF fallback path; word lists produced by `to_words()`
+  always carry a SOF and round-trip exactly, including trailing nulls.
+
+```python
+from arinc429.loader import Arinc615Packetizer
+
+p = Arinc615Packetizer(b"HELLO")
+words = p.to_words()
+
+decoded = Arinc615Packetizer.decode(words)
+assert decoded == b"HELLO"
+```
 
 ---
 
