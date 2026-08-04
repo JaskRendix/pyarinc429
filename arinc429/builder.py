@@ -39,7 +39,6 @@ class WordBuilder:
         return self
 
     def build(self) -> Word:
-
         unknowns = [
             name
             for name in self.__dict__
@@ -63,7 +62,7 @@ class WordBuilder:
             if self._ssm is not None:
                 w.ssm = self._ssm
 
-        except FieldOverflowError:
+        except (FieldOverflowError, ValueError):
             raise
 
         except Exception as exc:
