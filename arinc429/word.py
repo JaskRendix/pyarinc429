@@ -100,6 +100,12 @@ class Word:
         """Return the 32-bit word as an MSB-first '0'/'1' string, bit 32 first."""
         return f"{self._value:032b}"
 
+    def to_json(self, indent: int | None = None) -> str:
+        """Serialize the Word dictionary representation to a JSON string."""
+        import json
+
+        return json.dumps(self.as_dict(), indent=indent)
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Word:
         """
