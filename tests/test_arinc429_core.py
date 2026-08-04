@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from arinc429.arinc429 import (
+from arinc429 import (
     BCD,
     BNR,
     PARITY_BIT,
