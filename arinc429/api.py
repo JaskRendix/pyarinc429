@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, LabelDefinition, decode_word
+from arinc429.definitions import EQUIP_ALL, LabelDefinition, decode_word
 from arinc429.labelinfo import LabelInfo
 from arinc429.word import Word
 
-DEFAULT_DEFINITIONS: dict[int, LabelDefinition] = {**EQUIP_ADC, **EQUIP_IRS}
+DEFAULT_DEFINITIONS: dict[int, LabelDefinition] = EQUIP_ALL
 
 DecodeResult = (
     tuple[dict[str, object], LabelDefinition, LabelInfo | None]
