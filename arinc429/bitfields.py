@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import NamedTuple
+from dataclasses import dataclass
 
 
-class BitFieldRange(NamedTuple):
+@dataclass(frozen=True)
+class BitFieldRange:
     lsb: int
     msb: int
     name: str = "unknown"
