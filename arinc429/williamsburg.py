@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .arinc429 import DATA_BITS, Word
+from .bitfields import DATA_BITS
+from .word import Word
 
 
 class WilliamsburgError(Exception):
