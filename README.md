@@ -99,6 +99,7 @@ w = (
     .data(0x55AA)
     .ssm(2)
     .parity_type(Word.EVEN_PARITY)
+    .strict_parity(True)
     .build()
 )
 ```
@@ -107,7 +108,8 @@ Builder rules:
 
 - Unknown attributes raise `ValueError`.  
 - `FieldOverflowError` propagates.  
-- Other exceptions are wrapped in `ValueError`.
+- Other exceptions are wrapped in `ValueError`.  
+- **`strict_parity(True)` enforces parity correctness**: if the computed parity bit does not match the requested parity type, `.build()` raises `ValueError`.
 
 ---
 
@@ -181,6 +183,16 @@ decode_word(word, definitions)
 
 merge_definitions(*equip_sets)
     -> combined definition map (later sets override earlier ones)
+```
+
+### High‑level API
+
+```python
+from arinc429.api import combine_definitions
+from arinc429.definitions import EQUIP_ADC, EQUIP_IRS
+
+# Combine multiple equipment sets into a single unified map
+custom_definitions = combine_definitions(EQUIP_ADC, EQUIP_IRS)
 ```
 
 ---
