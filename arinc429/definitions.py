@@ -36,7 +36,7 @@ class LabelDefinition:
 
     @property
     def field_names(self) -> tuple[str, ...]:
-        return tuple(f.name for f in the fields if hasattr(self, "fields")) and tuple(f.name for f in self.fields)
+        return tuple(f.name for f in self.fields)
 
     def validate_word(self, word: Word) -> list[str]:
         errors: list[str] = []
