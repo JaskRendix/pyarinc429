@@ -17,28 +17,32 @@ class Word:
     EVEN_PARITY = 0
     ODD_PARITY = 1
 
-    def __init__(self, value: int = 0, parity_type: int = ODD_PARITY) -> None:
+    def __init__(self, value: int = 0, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> None:
         if parity_type not in (self.EVEN_PARITY, self.ODD_PARITY):
             raise ValueError(f"Invalid parity type: {parity_type}")
         self._value = 0
         self._parity_type = parity_type
+        self._strict_parity = strict_parity
         self._set_raw_preserving_parity(value)
 
-    @classmethod
-    def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> Word:
-        """Create a Word from a raw 32‑bit integer without corrupting parity."""
-        return cls(value, parity_type)
+        if self._strict_parity and not self.parity_ok:
+            raise ValueError("Parity check failed under strict parity enforcement")
 
     @classmethod
-    def from_hex(cls, hex_str: str, parity_type: int = ODD_PARITY) -> Word:
+    def from_int(cls, value: int, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> Word:
+        """Create a Word from a raw 32‑bit integer."""
+        return cls(value, parity_type, strict_parity=strict_parity)
+
+    @classmethod
+    def from_hex(cls, hex_str: str, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> Word:
         """Create a Word from a hex string (e.g. '0x12345678')."""
-        return cls(int(hex_str, 16), parity_type)
+        return cls(int(hex_str, 16), parity_type, strict_parity=strict_parity)
 
     @classmethod
-    def from_bin(cls, bin_str: str, parity_type: int = ODD_PARITY) -> Word:
+    def from_bin(cls, bin_str: str, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> Word:
         """Create a Word from a binary string (e.g. '1000...')."""
         cleaned = bin_str.replace("_", "").replace(" ", "")
-        return cls(int(cleaned, 2), parity_type)
+        return cls(int(cleaned, 2), parity_type, strict_parity=strict_parity)
 
     def to_int(self) -> int:
         return self._value
@@ -48,7 +52,8 @@ class Word:
         return self._value
 
     def copy(self) -> Word:
-        return Word(self._value, self._parity_type)
+        w = Word(self._value, self._parity_type, strict_parity=self._strict_parity)
+        return w
 
     def with_fields(self, **kwargs: Any) -> Word:
         w = self.copy()
