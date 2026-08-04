@@ -22,6 +22,23 @@ def test_word_from_int_roundtrip():
     assert (w.to_int() & 0x7FFFFFFF) == (raw & 0x7FFFFFFF)
 
 
+def test_word_from_hex():
+    w = Word.from_hex("0x12345678")
+    assert w.raw == 0x12345678
+
+
+def test_word_from_bin():
+    w = Word.from_bin("00010010001101000101011001111000")
+    assert w.raw == 0x12345678
+
+
+def test_word_bool():
+    w_zero = Word(0)
+    w_nonzero = Word(0x12345678)
+    assert not w_zero
+    assert w_nonzero
+
+
 def test_word_raw_property():
     w = Word(0x12345678)
     assert w.raw == 0x12345678
@@ -330,7 +347,6 @@ def test_word_from_dict_missing_keys_default_to_zero():
 
 
 def test_word_from_dict_ignores_raw_and_parity():
-    # 'raw' and 'parity' are derived fields; from_dict must not consume them directly
     d = {"raw": 0xDEADBEEF, "parity": 1, "label": 0o123}
     w = Word.from_dict(d)
     assert w.label == 0o123
@@ -344,11 +360,8 @@ def test_word_from_dict_honors_parity_type():
 
 def test_validate_collects_multiple_errors_joined():
     w = Word()
-    w.set_bit_field(9, 10, 3)  # valid SDI, just to set up raw bits directly
-    # Force SSM and parity both invalid by writing raw bits directly,
-    # bypassing the property setters' own validation.
-    w._value |= 0b11 << 29  # SSM bits -> still in-range (0-3), so flip parity instead
-    object.__setattr__(w, "_value", w._value ^ (1 << 31))  # corrupt parity bit
+    w.set_bit_field(9, 10, 3)
+    object.__setattr__(w, "_value", w._value ^ (1 << 31))
 
     errors = w.validate(raise_on_error=False)
     assert "Parity bit does not match computed parity" in errors
@@ -406,4 +419,4 @@ def test_word_from_int_invalid_parity_type_raises():
 def test_word_init_valid_parity_types_do_not_raise():
     Word(0, Word.EVEN_PARITY)
     Word(0, Word.ODD_PARITY)
-    Word()  # default
+    Word()
