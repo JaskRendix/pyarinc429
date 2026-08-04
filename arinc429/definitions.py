@@ -179,6 +179,17 @@ def validate_metadata(word: Word, info: LabelInfo) -> list[str]:
     return errors
 
 
+def merge_definitions(*equip_sets: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
+    """
+    Combine multiple equipment definition dictionaries into a single unified map.
+    Later definitions in the argument list overwrite conflicting labels.
+    """
+    merged: dict[int, LabelDefinition] = {}
+    for equip in equip_sets:
+        merged.update(equip)
+    return merged
+
+
 _RAW_EQUIP_ADC: dict[int, LabelDefinition] = {
     0o203: LabelDefinition(
         name="Pressure Altitude",
