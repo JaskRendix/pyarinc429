@@ -156,7 +156,7 @@ class Word:
 
     @property
     def parity(self) -> int:
-        return self.get_bit_field(PARITY_BIT, PARITY_BIT)
+        return self.get_bit_field(PARITY_BIT.lsb, PARITY_BIT.msb)
 
     @property
     def parity_ok(self) -> bool:
@@ -254,7 +254,7 @@ class Word:
 
     def _recompute_parity(self) -> None:
         """Recompute parity without destroying other bits."""
-        parity_offset = PARITY_BIT - 1
+        parity_offset = PARITY_BIT.lsb - 1
 
         # Count bits 1–31
         count = (self._value & ((1 << 31) - 1)).bit_count()
