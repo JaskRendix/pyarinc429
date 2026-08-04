@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from arinc429.datatypes.bnr import BNR
 from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, FieldDefinition, LabelDefinition
 from arinc429.word import Word
 
