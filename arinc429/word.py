@@ -122,37 +122,37 @@ class Word:
 
     @property
     def label(self) -> int:
-        wire = self.get_bit_field(*LABEL_BITS)
+        wire = self.get_bit_field(LABEL_BITS.lsb, LABEL_BITS.msb)
         return decode_label(wire)
 
     @label.setter
     def label(self, value: int) -> None:
         encoded = encode_label(value)
-        self.set_bit_field(*LABEL_BITS, encoded)
+        self.set_bit_field(LABEL_BITS.lsb, LABEL_BITS.msb, encoded)
 
     @property
     def sdi(self) -> int:
-        return self.get_bit_field(*SDI_BITS)
+        return self.get_bit_field(SDI_BITS.lsb, SDI_BITS.msb)
 
     @sdi.setter
     def sdi(self, value: int) -> None:
-        self.set_bit_field(*SDI_BITS, value)
+        self.set_bit_field(SDI_BITS.lsb, SDI_BITS.msb, value)
 
     @property
     def data(self) -> int:
-        return self.get_bit_field(*DATA_BITS)
+        return self.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
 
     @data.setter
     def data(self, value: int) -> None:
-        self.set_bit_field(*DATA_BITS, value)
+        self.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, value)
 
     @property
     def ssm(self) -> int:
-        return self.get_bit_field(*SSM_BITS)
+        return self.get_bit_field(SSM_BITS.lsb, SSM_BITS.msb)
 
     @ssm.setter
     def ssm(self, value: int) -> None:
-        self.set_bit_field(*SSM_BITS, value)
+        self.set_bit_field(SSM_BITS.lsb, SSM_BITS.msb, value)
 
     @property
     def parity(self) -> int:
