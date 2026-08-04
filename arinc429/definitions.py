@@ -5,6 +5,9 @@ from decimal import Decimal
 from typing import Literal
 
 from arinc429.bitfields import DATA_BITS
+from arinc429.datatypes.bcd import BCD
+from arinc429.datatypes.bnr import BNR
+from arinc429.datatypes.discrete import Discrete
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
 from arinc429.word import Word
 
@@ -64,9 +67,9 @@ def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
 
 def decode_word(
     word: Word,
-    definitions,
+    definitions: dict[int, LabelDefinition],
     report_unknown: bool = False,
-) -> tuple[dict, LabelDefinition, LabelInfo | None] | None:
+) -> tuple[dict, LabelDefinition, LabelInfo | None] | tuple[dict, LabelDefinition, LabelInfo | None, list[str]] | None:
     """
     Decode a word using a label -> LabelDefinition mapping.
 
@@ -85,10 +88,6 @@ def decode_word(
         definition: LabelDefinition = definitions[word.label]
     except KeyError:
         return None
-
-    from .datatypes.bcd import BCD
-    from .datatypes.bnr import BNR
-    from .datatypes.discrete import Discrete
 
     decoded_fields: dict[str, object] = {}
     unknown_fields: list[str] = []
@@ -144,7 +143,7 @@ def validate_label_structure(defn: LabelDefinition) -> list[str]:
     ranges = [(f.lsb, f.msb, f.name) for f in defn.fields]
 
     for i, (lsb1, msb1, name1) in enumerate(ranges):
-        for lsb2, msb2, name2 in ranges[i + 1 :]:
+        for lsb2, msb2, name2 in ranges[i + 1:]:
             if not (msb1 < lsb2 or msb2 < lsb1):
                 errors.append(f"Fields {name1} and {name2} overlap")
 
@@ -230,3 +229,4 @@ _RAW_EQUIP_IRS: dict[int, LabelDefinition] = {
 
 EQUIP_ADC = attach_info(_RAW_EQUIP_ADC)
 EQUIP_IRS = attach_info(_RAW_EQUIP_IRS)
+EQUIP_ALL = {**EQUIP_ADC, **EQUIP_IRS}
