@@ -68,6 +68,7 @@ Represents a 32‑bit ARINC 429 word.
 - **copy**()  
 - **with_fields**(label=…, sdi=…, data=…, ssm=…)  
 - **as_dict**()  
+- **to_json**(indent=None)  
 - **validate**(raise_on_error=False)
 
 ### Bit‑field rules
@@ -119,7 +120,7 @@ BCD(value, resolution)
 ```
 
 Attributes: `decoded`, `encoded`, `resolution`, `sign`  
-Methods: `decode`, `copy`, `with_resolution`, `as_dict`
+Methods: `decode`, `copy`, `with_resolution`, `as_dict`, `to_json`
 
 ### BNR
 
@@ -128,7 +129,7 @@ BNR(value, resolution)
 ```
 
 Attributes: `decoded`, `encoded`, `resolution`  
-Methods: `decode`, `copy`, `with_resolution`, `as_dict`
+Methods: `decode`, `copy`, `with_resolution`, `as_dict`, `to_json`
 
 ### Discrete
 
@@ -137,7 +138,7 @@ Discrete(value)
 ```
 
 Attributes: `decoded`, `encoded`  
-Methods: `decode`, `copy`, `as_dict`
+Methods: `decode`, `copy`, `as_dict`, `to_json`
 
 ---
 
@@ -168,14 +169,18 @@ LabelDefinition(name, fields, info=None)
 Equipment sets:
 
 - `EQUIP_ADC`  
-- `EQUIP_IRS`
+- `EQUIP_IRS`  
+- `EQUIP_ALL`
 
-Helper:
+Helpers:
 
 ```python
 decode_word(word, definitions)
     -> (decoded_fields, LabelDefinition, LabelInfo | None)
     -> None if label not in definitions
+
+merge_definitions(*equip_sets)
+    -> combined definition map (later sets override earlier ones)
 ```
 
 ---
