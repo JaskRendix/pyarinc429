@@ -1,4 +1,4 @@
-from arinc429.arinc429 import DATA_BITS, Word
+from arinc429 import DATA_BITS, Word
 from arinc429.loader import Arinc615Packetizer
 
 
