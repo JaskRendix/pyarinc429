@@ -89,7 +89,7 @@ def test_discrete_from_name(name, value):
 
 
 def test_discrete_from_name_invalid():
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         Discrete.from_name("NOT_A_REAL_NAME")
 
 
