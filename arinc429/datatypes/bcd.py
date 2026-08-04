@@ -16,15 +16,17 @@ class BCD(DataFieldType):
     def __init__(
         self, value: DataFieldValue = 0, resolution: DataFieldValue = 1
     ) -> None:
-        value = Decimal(str(value))
-        resolution = Decimal(str(resolution))
+        val_dec = Decimal(str(value))
+        res_dec = Decimal(str(resolution))
 
-        encoded_value = value // resolution
-        minus, digits, _ = encoded_value.as_tuple()
+        self._sign = self.MINUS if val_dec < 0 else self.PLUS
+        abs_val = abs(val_dec)
 
-        self._decoded_value = encoded_value * resolution
-        self._resolution = resolution
-        self._sign = self.MINUS if minus else self.PLUS
+        encoded_value = abs_val // res_dec
+        _, digits, _ = encoded_value.as_tuple()
+
+        self._decoded_value = val_dec
+        self._resolution = res_dec
 
         bcd_value = 0
         for digit in digits:
