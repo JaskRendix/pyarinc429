@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .arinc429 import DATA_BITS, Word
+from .bitfields import DATA_BITS
+from .word import Word
 
 
 class Arinc615Packetizer:
@@ -46,7 +47,7 @@ class Arinc615Packetizer:
 
         eof = Word()
         eof.label = self.CONTROL_LABEL_EOF
-        eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)  # ← required by tests
+        eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)
         words.append(eof)
 
         return words
@@ -81,5 +82,9 @@ class Arinc615Packetizer:
                 data.extend(value.to_bytes(2, "big"))
 
         if length is not None:
+            if length > len(data):
+                raise ValueError(
+                    f"Specified length ({length}) exceeds available decoded data length ({len(data)})"
+                )
             return bytes(data[:length])
         return bytes(data).rstrip(b"\x00")
