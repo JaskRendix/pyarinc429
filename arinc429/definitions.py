@@ -36,7 +36,7 @@ class LabelDefinition:
 
     @property
     def field_names(self) -> tuple[str, ...]:
-        return tuple(f.name for f in self.fields)
+        return tuple(f.name for f in the fields if hasattr(self, "fields")) and tuple(f.name for f in self.fields)
 
     def validate_word(self, word: Word) -> list[str]:
         errors: list[str] = []
@@ -50,6 +50,13 @@ class LabelDefinition:
             errors.extend(validate_metadata(word, self.info))
 
         return errors
+
+    def decode(
+        self, word: Word, report_unknown: bool = False
+    ) -> tuple[dict[str, object], LabelDefinition, LabelInfo | None] | tuple[dict[str, object], LabelDefinition, LabelInfo | None, list[str]] | None:
+        """Decode a word directly using this label definition."""
+        label_key = self.info.label if self.info else word.label
+        return decode_word(word, {label_key: self}, report_unknown=report_unknown)
 
 
 def attach_info(defs: dict[int, LabelDefinition]) -> dict[int, LabelDefinition]:
@@ -69,7 +76,7 @@ def decode_word(
     word: Word,
     definitions: dict[int, LabelDefinition],
     report_unknown: bool = False,
-) -> tuple[dict, LabelDefinition, LabelInfo | None] | tuple[dict, LabelDefinition, LabelInfo | None, list[str]] | None:
+) -> tuple[dict[str, object], LabelDefinition, LabelInfo | None] | tuple[dict[str, object], LabelDefinition, LabelInfo | None, list[str]] | None:
     """
     Decode a word using a label -> LabelDefinition mapping.
 
@@ -125,6 +132,9 @@ def validate_field(word: Word, field: FieldDefinition) -> list[str]:
 
     if field.lsb < DATA_BITS.lsb or field.msb > DATA_BITS.msb:
         errors.append(f"Field {field.name} out of DATA range")
+
+    if field.lsb > field.msb:
+        errors.append(f"Field {field.name} has invalid range (lsb > msb)")
 
     if field.type in ("BNR", "BCD") and field.resolution is None:
         errors.append(f"Field {field.name} missing resolution")
