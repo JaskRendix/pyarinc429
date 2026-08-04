@@ -59,7 +59,6 @@ LABEL_INFO: dict[int, LabelInfo] = {
         direction="Source",
         description="Aircraft longitude from inertial navigation solution.",
     ),
-    # Add more as needed...
 }
 
 
@@ -74,7 +73,12 @@ def require_label_info(label: int) -> LabelInfo:
     """
     Return LabelInfo for a given label, raising KeyError if not present.
     """
-    try:
-        return LABEL_INFO[label]
-    except KeyError:
+    info = get_label_info(label)
+    if info is None:
         raise KeyError(f"No metadata available for ARINC 429 label {label:#o}")
+    return info
+
+
+def get_labels_by_system(system: str) -> list[LabelInfo]:
+    """Return all label metadata registered for a specific system (e.g., 'ADC')."""
+    return [info for info in LABEL_INFO.values() if info.system.upper() == system.upper()]
