@@ -63,7 +63,7 @@ class Word:
         return self._value
 
     def __bool__(self) -> bool:
-        return self._value != 0
+        return (self._value & 0x7FFFFFFF) != 0
 
     def __format__(self, fmt: str) -> str:
         return self._value.__format__(fmt)
