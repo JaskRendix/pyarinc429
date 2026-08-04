@@ -110,20 +110,18 @@ def test_packetizer_does_not_mutate_input():
     assert data == b"HELLO"
 
 
-def test_corrupted_data_word_does_not_break_decode():
+def test_corrupted_data_word_raises_value_error():
     p = Arinc615Packetizer(b"DATA")
     words = p.to_words()
 
     # Corrupt the first DATA word (index 1; index 0 is SOF).
-    # b"DATA" -> DATA words carry b"DA" then b"TA"; zeroing the first
-    # leaves only b"TA" actually accumulated. SOF still claims length 4,
-    # but decode() only trims to at most `length`, it never pads -- so
-    # the corrupted word's bytes are simply absent from the result.
+    # This results in fewer decoded bytes than the SOF length header claims,
+    # raising a ValueError for length mismatch.
     corrupted = words.copy()
     corrupted[1] = Word()  # label defaults to 0o0
 
-    decoded = Arinc615Packetizer.decode(corrupted)
-    assert decoded == b"TA"
+    with pytest.raises(ValueError):
+        Arinc615Packetizer.decode(corrupted)
 
 
 def test_manual_word_injection_before_eof():
