@@ -9,7 +9,7 @@ class WordBuilder:
     Fluent builder for constructing ARINC 429 Word instances.
     """
 
-    _allowed_fields = {"_label", "_sdi", "_data", "_ssm", "_parity_type"}
+    _allowed_fields = {"_label", "_sdi", "_data", "_ssm", "_parity_type", "_strict_parity"}
 
     def __init__(self, parity_type: int = Word.ODD_PARITY) -> None:
         self._label: int | None = None
@@ -17,6 +17,7 @@ class WordBuilder:
         self._data: int | None = None
         self._ssm: int | None = None
         self._parity_type = parity_type
+        self._strict_parity: bool = False
 
     def label(self, value: int) -> WordBuilder:
         self._label = value
@@ -36,6 +37,10 @@ class WordBuilder:
 
     def parity_type(self, value: int) -> WordBuilder:
         self._parity_type = value
+        return self
+
+    def strict_parity(self, enabled: bool = True) -> WordBuilder:
+        self._strict_parity = enabled
         return self
 
     def build(self) -> Word:
@@ -67,5 +72,9 @@ class WordBuilder:
 
         except Exception as exc:
             raise ValueError(f"Failed to build Word layout: {exc}") from exc
+
+        # Apply strict parity check if requested
+        if self._strict_parity and not w.parity_ok:
+            raise ValueError("Parity check failed under strict parity enforcement")
 
         return w
