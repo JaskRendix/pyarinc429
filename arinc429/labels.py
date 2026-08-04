@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ENCODE_LABEL = {lbl: int(format(lbl, "08b")[::-1], 2) for lbl in range(0o000, 0o400)}
-DECODE_LABEL = {wire: lbl for lbl, wire in ENCODE_LABEL.items()}
+__all__ = [
+    "LabelInfo",
+    "is_valid_label",
+    "encode_label",
+    "decode_label",
+    "reverse_label",
+]
+
+ENCODE_LABEL: dict[int, int] = {lbl: int(format(lbl, "08b")[::-1], 2) for lbl in range(0o000, 0o400)}
+DECODE_LABEL: dict[int, int] = {wire: lbl for lbl, wire in ENCODE_LABEL.items()}
 
 
 @dataclass(frozen=True)
@@ -24,8 +32,8 @@ def encode_label(label: int) -> int:
     """
     try:
         return ENCODE_LABEL[label]
-    except KeyError:
-        raise ValueError(f"Invalid ARINC 429 label: {label:#o}")
+    except KeyError as exc:
+        raise ValueError(f"Invalid ARINC 429 label: {label:#o}") from exc
 
 
 def decode_label(wire: int) -> int:
@@ -35,8 +43,8 @@ def decode_label(wire: int) -> int:
     """
     try:
         return DECODE_LABEL[wire]
-    except KeyError:
-        raise ValueError(f"Invalid ARINC 429 wire label: {wire:#x}")
+    except KeyError as exc:
+        raise ValueError(f"Invalid ARINC 429 wire label: {wire:#x}") from exc
 
 
 def reverse_label(label: int) -> int:
