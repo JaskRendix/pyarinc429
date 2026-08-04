@@ -8,6 +8,7 @@ from arinc429.definitions import (
     FieldDefinition,
     LabelDefinition,
     decode_word,
+    merge_definitions,
     validate_metadata,
 )
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
@@ -196,3 +197,32 @@ def test_decode_word_report_unknown_true_no_unknown_fields():
     decoded, definition, info, unknown = decode_word(w, EQUIP_ADC, report_unknown=True)
     assert unknown == []
     assert "altitude" in decoded
+
+
+def test_merge_definitions_basic():
+    merged = merge_definitions(EQUIP_ADC, EQUIP_IRS)
+    assert 0o203 in merged  # From ADC
+    assert 0o310 in merged  # From IRS
+    assert len(merged) == len(EQUIP_ADC) + len(EQUIP_IRS)
+
+
+def test_merge_definitions_overlap_precedence():
+    # Create a custom override definition for label 0o203
+    override_def = LabelDefinition(
+        name="Overridden Altitude",
+        fields=(FieldDefinition("custom_alt", 11, 29, "BNR", Decimal("1.0")),),
+    )
+    custom_equip = {0o203: override_def}
+
+    # Later dictionary should overwrite earlier ones
+    merged = merge_definitions(EQUIP_ADC, custom_equip)
+    assert merged[0o203].name == "Overridden Altitude"
+    assert merged[0o203].field_names == ("custom_alt",)
+
+
+def test_merge_definitions_empty():
+    merged = merge_definitions()
+    assert merged == {}
+    
+    merged_single = merge_definitions(EQUIP_ADC)
+    assert merged_single == EQUIP_ADC
