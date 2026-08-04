@@ -199,13 +199,16 @@ def test_word_set_bit_field_accepts_DataFieldType():
         def __int__(self):
             return 5
 
+        def as_dict(self) -> dict:
+            return {"type": "DummyType", "value": 5}
+
         @staticmethod
         def decode(*args, **kwargs):
             return 5
 
     w = Word()
     w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, DummyType())
-    assert w.data == 5
+    assert w.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb) == 5
 
 
 def test_set_raw_preserving_parity_recomputes_correct_parity():
