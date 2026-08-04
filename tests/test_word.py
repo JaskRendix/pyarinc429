@@ -204,7 +204,7 @@ def test_word_set_bit_field_accepts_DataFieldType():
             return 5
 
     w = Word()
-    w.set_bit_field(*DATA_BITS, DummyType())
+    w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, DummyType())
     assert w.data == 5
 
 
