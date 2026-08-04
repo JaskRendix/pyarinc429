@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, FieldDefinition, LabelDefinition
+from arinc429.word import Word
 
 
 def test_labeldefinition_basic_fields():
