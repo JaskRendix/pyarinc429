@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .bitfields import DATA_BITS, LABEL_BITS, LSB, MSB, PARITY_BIT, SDI_BITS, SSM_BITS
 from .datatypes.base import DataFieldType
 from .errors import FieldOverflowError
 from .labels import decode_label, encode_label
+
+if TYPE_CHECKING:
+    from .definitions import LabelDefinition
 
 
 class Word:
@@ -25,6 +28,17 @@ class Word:
     def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> Word:
         """Create a Word from a raw 32‑bit integer without corrupting parity."""
         return cls(value, parity_type)
+
+    @classmethod
+    def from_hex(cls, hex_str: str, parity_type: int = ODD_PARITY) -> Word:
+        """Create a Word from a hex string (e.g. '0x12345678')."""
+        return cls(int(hex_str, 16), parity_type)
+
+    @classmethod
+    def from_bin(cls, bin_str: str, parity_type: int = ODD_PARITY) -> Word:
+        """Create a Word from a binary string (e.g. '1000...')."""
+        cleaned = bin_str.replace("_", "").replace(" ", "")
+        return cls(int(cleaned, 2), parity_type)
 
     def to_int(self) -> int:
         return self._value
@@ -47,6 +61,9 @@ class Word:
 
     def __index__(self) -> int:
         return self._value
+
+    def __bool__(self) -> bool:
+        return self._value != 0
 
     def __format__(self, fmt: str) -> str:
         return self._value.__format__(fmt)
@@ -249,19 +266,12 @@ class Word:
         # Set parity bit
         self._value |= parity_bit << parity_offset
 
-    def decode_with_definition(self, definition, report_unknown: bool = False):
+    def decode_with_definition(
+        self, definition: LabelDefinition, report_unknown: bool = False
+    ):
         """
         Decode this ARINC 429 word using a multi-field LabelDefinition.
-
-        By default returns a dict of field_name -> decoded_value, matching
-        prior behavior exactly (unknown field types are silently skipped).
-
-        If report_unknown=True, returns a tuple
-            (decoded_fields, unknown_field_names)
-        instead, so callers can detect definitions referencing field types
-        this version of the library doesn't know how to decode.
         """
-
         from .datatypes.bcd import BCD
         from .datatypes.bnr import BNR
         from .datatypes.discrete import Discrete
@@ -288,8 +298,8 @@ class Word:
             return decoded_fields, unknown_fields
         return decoded_fields
 
-    def decode_by_label(self, definitions: dict[int, Any]):
-        label = self.label  # raises ValueError via decode_label if wire is malformed
+    def decode_by_label(self, definitions: dict[int, LabelDefinition]):
+        label = self.label
         try:
             definition = definitions[label]
         except KeyError:
@@ -297,10 +307,10 @@ class Word:
 
         return self.decode_with_definition(definition)
 
-    def validate_against(self, definition) -> list[str]:
+    def validate_against(self, definition: LabelDefinition) -> list[str]:
         return definition.validate_word(self)
 
-    def validate_by_label(self, definitions) -> list[str]:
+    def validate_by_label(self, definitions: dict[int, LabelDefinition]) -> list[str]:
         try:
             definition = definitions[self.label]
         except KeyError:
