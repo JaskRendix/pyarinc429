@@ -4,6 +4,9 @@ from arinc429.datatypes.base import DataFieldType
 
 
 class DummyField(DataFieldType):
+    def as_dict(self) -> dict:
+        return {"type": "DummyField", "value": self._value}
+
     @classmethod
     def decode(cls, **kwargs):
         return cls(kwargs.get("value", 0))
@@ -22,6 +25,9 @@ def test_datafieldtype_equality_same_type():
 
 def test_datafieldtype_equality_different_type():
     class OtherField(DataFieldType):
+        def as_dict(self) -> dict:
+            return {"type": "OtherField", "value": self._value}
+
         @classmethod
         def decode(cls, **kwargs):
             return cls(kwargs.get("value", 0))
@@ -35,6 +41,13 @@ def test_datafieldtype_equality_different_value():
     d1 = DummyField(5)
     d2 = DummyField(6)
     assert d1 != d2
+
+
+def test_datafieldtype_equality_with_non_datafield_returns_false():
+    d = DummyField(5)
+    assert d != 5
+    assert d != "5"
+    assert d != {"value": 5}
 
 
 @pytest.mark.parametrize(
@@ -88,7 +101,6 @@ def test_datafieldtype_ge(a, b, expected):
 def test_datafieldtype_comparison_with_non_int_returns_notimplemented():
     d = DummyField(5)
 
-    # All of these must raise TypeError because Python falls back to reflected ops
     with pytest.raises(TypeError):
         _ = d < "x"
 
@@ -127,6 +139,13 @@ def test_datafieldtype_dict_equality():
     d1 = DummyField(7)
     d2 = DummyField(7)
     assert d1.__dict__ == d2.__dict__
+
+
+def test_datafieldtype_to_json():
+    d = DummyField(42)
+    json_str = d.to_json()
+    assert '"type": "DummyField"' in json_str
+    assert '"value": 42' in json_str
 
 
 def test_datafieldtype_decode_returns_instance():
