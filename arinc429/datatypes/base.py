@@ -22,7 +22,7 @@ class DataFieldType(ABC):
     def __ge__(self, other) -> bool:
         return self._value >= other if isinstance(other, int) else NotImplemented
 
-    def __and__(self, other) -> bool:
+    def __and__(self, other) -> int:
         return self._value & other if isinstance(other, int) else NotImplemented
 
     def __int__(self) -> int:
