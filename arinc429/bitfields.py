@@ -6,6 +6,7 @@ from typing import NamedTuple
 class BitFieldRange(NamedTuple):
     lsb: int
     msb: int
+    name: str = "unknown"
 
     @property
     def width(self) -> int:
@@ -33,14 +34,23 @@ class BitFieldRange(NamedTuple):
         cleaned_mask = self.shifted_mask
         return (raw_word & ~cleaned_mask) | ((value << (self.lsb - 1)) & cleaned_mask)
 
+    def __int__(self) -> int:
+        """Allow coercion/comparison to int using msb (useful for single-bit or legacy checks)."""
+        return self.msb
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            return self.msb == other and self.lsb == other
+        return super().__eq__(other)
+
 
 # Core ARINC 429 bit positions
 
 LSB = 1
 MSB = 32
 
-LABEL_BITS = BitFieldRange(1, 8)
-SDI_BITS = BitFieldRange(9, 10)
-DATA_BITS = BitFieldRange(11, 29)
-SSM_BITS = BitFieldRange(30, 31)
-PARITY_BIT = BitFieldRange(32, 32)
+LABEL_BITS = BitFieldRange(1, 8, "label")
+SDI_BITS = BitFieldRange(9, 10, "sdi")
+DATA_BITS = BitFieldRange(11, 29, "data")
+SSM_BITS = BitFieldRange(30, 31, "ssm")
+PARITY_BIT = BitFieldRange(32, 32, "parity")
