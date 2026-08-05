@@ -5,19 +5,20 @@ import json
 from pathlib import Path
 
 from arinc429.api import combine_definitions, decode_and_validate
-from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, EQUIP_ALL
+from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, EQUIP_ALL, LabelDefinition
 from arinc429.loader import Arinc615Packetizer
+from arinc429.icd import load_icd_json
 from arinc429.williamsburg import WilliamsburgSession
 from arinc429.word import Word
 
-EQUIP_MAP = {
+EQUIP_MAP: dict[str, dict[int, LabelDefinition]] = {
     "adc": EQUIP_ADC,
     "irs": EQUIP_IRS,
     "all": EQUIP_ALL,
 }
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="CLI tool for PyARINC429.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -39,6 +40,10 @@ def main():
     sim_parser.add_argument("message", help="Payload message to transfer.")
     sim_parser.add_argument("--trace", action="store_true", help="Print control-word sequence.")
 
+    # ICD Load command
+    icd_parser = subparsers.add_parser("load-icd", help="Load custom label definitions from an ICD JSON file.")
+    icd_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
+
     args = parser.parse_args()
 
     if args.command == "decode":
@@ -54,7 +59,7 @@ def main():
         res, errors = decode_and_validate(val, definitions=defs, parity_type=p_type, report_unknown=True)
         word_obj = Word.from_int(val, p_type)
 
-        decoded = {}
+        decoded: dict[str, object] = {}
         definition = None
         if res is not None:
             decoded, definition, _ = res
@@ -92,6 +97,7 @@ def main():
                 print(f"  * {err}")
 
     elif args.command == "arinc615-encode":
+        payload: bytes
         if args.file:
             try:
                 payload = args.file.read_bytes()
@@ -113,7 +119,7 @@ def main():
 
         hex_words = [hex(w.to_int()) for w in words]
         if args.output:
-            args.output.write_text(json.dumps(hex_words, indent=2))
+            args.output.write_text(json.dumps(hex_words, indent=2), encoding="utf-8")
             print(f"Successfully wrote {len(words)} words to {args.output}")
         else:
             print(f"Generated {len(words)} ARINC 615 words:")
@@ -132,14 +138,20 @@ def main():
                 print("SAL:", [hex(w.to_int()) for w in sal_words])
 
             rts_response = rx.process_incoming_word(sal_words[0])
-            if args.trace:
+            if args.trace and rts_response:
                 print("RTS:", [hex(w.to_int()) for w in rts_response])
 
+            if not rts_response:
+                raise RuntimeError("Receiver did not respond to SAL with RTS")
+
             block_words = tx.process_incoming_word(rts_response[0])
-            if args.trace:
+            if args.trace and block_words:
                 print("BLOCK:")
                 for w in block_words:
                     print(" ", hex(w.to_int()))
+
+            if not block_words:
+                raise RuntimeError("Transmitter failed to generate data block")
             
             ack_response = None
             for w in block_words:
@@ -153,9 +165,19 @@ def main():
                 tx.process_incoming_word(ack_response[0])
 
             recovered = rx.get_received_data()
+            if recovered is None:
+                raise RuntimeError("Failed to extract received data payload")
             print(f"\nSuccessfully reconstructed payload: {recovered.decode('utf-8')}")
         except Exception as e:
             print(f"Simulation failed with error: {e}")
+            raise SystemExit(1)
+
+    elif args.command == "load-icd":
+        try:
+            loaded = load_icd_json(args.icd_file)
+            print(f"Successfully loaded {len(loaded)} label definitions from {args.icd_file}")
+        except Exception as e:
+            print(f"Error loading ICD file: {e}")
             raise SystemExit(1)
 
 
