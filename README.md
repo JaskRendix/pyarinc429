@@ -42,6 +42,7 @@ arinc429/
         discrete.py
     loader.py
     williamsburg.py
+    icd.py
     cli.py
 ```
 
@@ -258,6 +259,39 @@ if errors:
 
 ---
 
+## ICD loader
+
+The ICD loader imports external label metadata from JSON files and registers them into the global `LABEL_INFO` registry.
+
+Example ICD file:
+
+```json
+{
+  "labels": [
+    {
+      "label": "0o203",
+      "name": "Pressure Altitude",
+      "system": "ADC",
+      "category": "Air Data",
+      "direction": "Source",
+      "description": "Custom description"
+    }
+  ]
+}
+```
+
+Load ICD metadata:
+
+```python
+from arinc429.icd import load_icd_json
+
+info = load_icd_json("icd.json")
+```
+
+This allows external ICDs to define custom label metadata without modifying Python source files.
+
+---
+
 ## CLI
 
 The project provides a command‑line interface under the executable name `pyarinc`.
@@ -311,3 +345,11 @@ Trace control‑word sequence:
 ```bash
 pyarinc williamsburg-simulate "HELLO" --trace
 ```
+
+### Load ICD metadata
+
+```bash
+pyarinc load-icd icd.json
+```
+
+Loads external label metadata into the runtime registry.
