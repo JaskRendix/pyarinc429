@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-import time
-import threading
+import json
 import random
-from typing import Callable, Protocol, Any
+import threading
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from .word import Word
+
+if TYPE_CHECKING:
+    pass
 
 
 class BusListener(Protocol):
@@ -36,6 +41,10 @@ class ArincBus:
             self.word_log.append((timestamp, source_id, word))
             for listener in self.listeners:
                 listener.on_word_received(word, source_id)
+
+    def publish(self, word: Word, source_id: str) -> None:
+        """Alias for transmit, used by replay components."""
+        self.transmit(word, source_id)
 
 
 class VirtualNode:
@@ -88,16 +97,17 @@ class BusMonitor:
         self.monitor_id = monitor_id
         self.bus = bus
         self.bus.attach(self)
-        self.captured_words: list[tuple[str, Word]] = []
+        self.captured_words: list[tuple[float, Word, str]] = []
         self.parity_errors_detected: int = 0
 
     def on_word_received(self, word: Word, source_id: str) -> None:
-        self.captured_words.append((source_id, word))
+        timestamp = time.time()
+        self.captured_words.append((timestamp, word, source_id))
         if not word.parity_ok:
             self.parity_errors_detected += 1
 
     def get_traffic_by_label(self, label: int) -> list[Word]:
-        return [word for _, word in self.captured_words if word.label == label]
+        return [word for _, word, _ in self.captured_words if word.label == label]
 
     def clear(self) -> None:
         self.captured_words.clear()
@@ -145,6 +155,70 @@ class FaultyVirtualNode(VirtualNode):
                     self.transmit_with_faults(word)
                     sched["next_run"] = now + sched["interval"]
             time.sleep(0.005)
+
+
+class BusRecorder:
+    """Utility to export BusMonitor or bus captured traffic to a file."""
+
+    @staticmethod
+    def export_to_jsonl(captured_words: list[tuple[float, Word, str]], filepath: Path | str) -> None:
+        """Export captured traffic (timestamp, word integer, parity_ok, source_id) to JSON Lines."""
+        path = Path(filepath)
+        with path.open("w", encoding="utf-8") as f:
+            for timestamp, word, source_id in captured_words:
+                record = {
+                    "timestamp": timestamp,
+                    "word_int": word.to_int(),
+                    "parity_type": word.parity_type,
+                    "source_id": source_id,
+                }
+                f.write(json.dumps(record) + "\n")
+
+
+class ReplayNode:
+    """Replays a recorded JSONL ARINC 429 traffic file onto a virtual bus with original timing."""
+
+    def __init__(self, filepath: Path | str, bus: ArincBus, speed_multiplier: float = 1.0) -> None:
+        self.filepath = Path(filepath)
+        self.bus = bus
+        self.speed_multiplier = speed_multiplier
+        self._running = False
+
+    def play(self) -> None:
+        """Read log records and push words to the bus respecting delta timestamps."""
+        if not self.filepath.exists():
+            raise FileNotFoundError(f"Record file not found: {self.filepath}")
+
+        with self.filepath.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines:
+            return
+
+        self._running = True
+        records = [json.loads(line) for line in lines]
+        
+        start_real_time = time.time()
+        start_log_time = records[0]["timestamp"]
+
+        for rec in records:
+            if not self._running:
+                break
+
+            log_delta = rec["timestamp"] - start_log_time
+            target_real_delay = log_delta / self.speed_multiplier
+            
+            elapsed_real = time.time() - start_real_time
+            sleep_time = target_real_delay - elapsed_real
+            
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+            word = Word.from_int(rec["word_int"], rec["parity_type"])
+            self.bus.publish(word, source_id=f"REPLAY:{rec['source_id']}")
+
+    def stop(self) -> None:
+        self._running = False
 
 
 def stop_all(nodes: list[VirtualNode]) -> None:
