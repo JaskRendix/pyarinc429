@@ -471,7 +471,7 @@ def test_generate_cli_success(tmp_path):
     )
 
     out_file = tmp_path / "generated_icd.py"
-    result = run_cli(["generate", str(icd_file), "--output", str(out_file)])
+    result = run_cli(["generate-icd-code", str(icd_file), "--output", str(out_file)])
     
     assert result.returncode == 0
     assert out_file.exists()
@@ -498,12 +498,12 @@ def test_generate_cli_stdout(tmp_path):
         encoding="utf-8",
     )
 
-    result = run_cli(["generate", str(icd_file)])
+    result = run_cli(["generate-icd-code", str(icd_file)])
     assert result.returncode == 0
     assert "SimpleLabelData" in result.stdout or "ICD_REGISTRY" in result.stdout
 
 
 def test_generate_cli_file_not_found():
-    result = run_cli(["generate", "non_existent_icd.json"])
+    result = run_cli(["generate-icd-code", "non_existent_icd.json"])
     assert result.returncode != 0
     assert "Error" in result.stderr or "Error" in result.stdout
