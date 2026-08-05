@@ -252,8 +252,6 @@ def test_help():
     assert "williamsburg-simulate" in out
 
 
-
-
 def test_help():
     result = run_cli(["--help"])
     assert result.returncode == 0
@@ -263,3 +261,58 @@ def test_help():
     assert "arinc615-encode" in out
     assert "williamsburg-simulate" in out
 
+
+def test_load_icd_success(tmp_path):
+    icd_file = tmp_path / "icd.json"
+    icd_file.write_text(
+        json.dumps({
+            "labels": [
+                {
+                    "label": "0o203",
+                    "name": "Pressure Altitude",
+                    "system": "ADC",
+                    "category": "Air Data",
+                    "direction": "Source",
+                    "description": "Test description"
+                }
+            ]
+        }),
+        encoding="utf-8"
+    )
+
+    result = run_cli(["load-icd", str(icd_file)])
+    assert result.returncode == 0
+    assert "Successfully loaded 1 label definitions" in result.stdout
+
+
+def test_load_icd_multiple(tmp_path):
+    icd_file = tmp_path / "icd.json"
+    icd_file.write_text(
+        json.dumps({
+            "labels": [
+                {"label": "0o203", "name": "A", "system": "ADC", "category": "Air Data"},
+                {"label": "0x45", "name": "B", "system": "IRS", "category": "Nav"},
+                {"label": 123, "name": "C", "system": "ADC", "category": "Misc"},
+            ]
+        }),
+        encoding="utf-8"
+    )
+
+    result = run_cli(["load-icd", str(icd_file)])
+    assert result.returncode == 0
+    assert "Successfully loaded 3 label definitions" in result.stdout
+
+
+def test_load_icd_file_not_found():
+    result = run_cli(["load-icd", "no_such_icd.json"])
+    assert result.returncode != 0
+    assert "Error loading ICD file" in result.stdout
+
+
+def test_load_icd_invalid_json(tmp_path):
+    icd_file = tmp_path / "icd.json"
+    icd_file.write_text("{ invalid json", encoding="utf-8")
+
+    result = run_cli(["load-icd", str(icd_file)])
+    assert result.returncode != 0
+    assert "Error loading ICD file" in result.stdout
