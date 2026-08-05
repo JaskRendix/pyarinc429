@@ -37,3 +37,6 @@ include = ["arinc429*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=arinc429 --cov-report=term-missing"
+markers = [
+    "examples: integration tests for example scripts"
+]
