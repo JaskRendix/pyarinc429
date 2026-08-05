@@ -316,3 +316,71 @@ def test_load_icd_invalid_json(tmp_path):
     result = run_cli(["load-icd", str(icd_file)])
     assert result.returncode != 0
     assert "Error loading ICD file" in result.stdout
+
+
+def test_simulate_basic():
+    result = run_cli(["simulate", "--duration", "0.5"])
+    assert result.returncode == 0
+
+    out = result.stdout
+    assert "Initializing ARINC 429 Bus Simulation" in out
+    assert "Simulation running for" in out
+    assert "Simulation Summary" in out
+    assert "Total words captured" in out
+    assert "Parity errors detected" in out
+
+    # ADC and IRS labels must appear
+    assert "203" in out or "0o203" in out
+    assert "310" in out or "0o310" in out
+
+
+def test_simulate_faulty_node():
+    result = run_cli(["simulate", "--duration", "0.5", "--faulty"])
+    assert result.returncode == 0
+
+    out = result.stdout
+    assert "FAULTY_SENSOR" in out
+    assert "Fault injection enabled" in out
+
+    # Faulty label must appear
+    assert "101" in out or "0o101" in out
+
+    # Parity errors should be >= 1
+    lines = out.splitlines()
+    parity_line = next((l for l in lines if "Parity errors detected" in l), None)
+    assert parity_line is not None
+
+    # Extract integer
+    count = int(parity_line.split(":")[1].strip())
+    assert count >= 1
+
+
+def test_simulate_duration_effect():
+    # Short run
+    short = run_cli(["simulate", "--duration", "0.2"])
+    assert short.returncode == 0
+    short_out = short.stdout
+
+    # Longer run
+    long = run_cli(["simulate", "--duration", "1.0"])
+    assert long.returncode == 0
+    long_out = long.stdout
+
+    # Extract counts
+    def extract_total(out):
+        for line in out.splitlines():
+            if "Total words captured" in line:
+                return int(line.split(":")[1].strip())
+        return 0
+
+    short_count = extract_total(short_out)
+    long_count = extract_total(long_out)
+
+    # Longer simulation must produce more traffic
+    assert long_count > short_count
+
+
+def test_simulate_invalid_duration():
+    result = run_cli(["simulate", "--duration", "-1"])
+    # argparse rejects negative float → exit code 2
+    assert result.returncode != 0
