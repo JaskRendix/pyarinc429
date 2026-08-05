@@ -1,19 +1,8 @@
-"""
-ARINC 429 Williamsburg Protocol Engine.
-
-Implements both:
-1. Stateful multi-word block transfers using a handshake 
-   (SAL -> RTS -> CTS -> SOF -> DATA... -> EOF -> ACK/NAK) with CRC-16-CCITT.
-2. Legacy passive framing classes (WilliamsburgTransmitter / WilliamsburgReceiver) 
-   for backward compatibility.
-"""
-
+```python
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum, IntEnum, auto
-from typing import List, Optional, Tuple
 
 from .bitfields import DATA_BITS
 from .word import Word
@@ -94,22 +83,23 @@ class LengthMismatch(WilliamsburgError):
     pass
 
 
+@dataclass
 class WilliamsburgSession:
     """
     ARINC 429 Williamsburg Protocol Engine with CRC-16 Integrity Check.
-    
+
     Handles both transmitter and receiver roles via state transitions driven
     by `process_incoming_word()`.
     """
 
-    LABEL_CONTROL = 0o144  # Control word label (SAL/RTS/CTS/SOF/EOF/ACK/NAK)
-    LABEL_DATA = 0o146     # Data word label
+    dest_address: int = 0
+    src_address: int = 0
+    is_transmitter: bool = True
 
-    def __init__(self, dest_address: int = 0, src_address: int = 0, is_transmitter: bool = True):
-        self.dest_address = dest_address
-        self.src_address = src_address
-        self.is_transmitter = is_transmitter
+    LABEL_CONTROL: int = 0o144  # Control word label (SAL/RTS/CTS/SOF/EOF/ACK/NAK)
+    LABEL_DATA: int = 0o146     # Data word label
 
+    def __post_init__(self) -> None:
         self.state = WilliamsburgState.IDLE
         self.payload = b""
         self.rx_buffer = bytearray()
@@ -122,10 +112,10 @@ class WilliamsburgSession:
         self.rx_buffer.clear()
         self.expected_length = 0
 
-    def initiate_transfer(self, payload: bytes) -> List[Word]:
+    def initiate_transfer(self, payload: bytes) -> list[Word]:
         """
         Initiates a Williamsburg transfer sequence (Transmitter side).
-        
+
         Returns the initial SAL control word to be sent on the bus.
         """
         if not self.is_transmitter:
@@ -149,12 +139,12 @@ class WilliamsburgSession:
         )
         return [sal_word]
 
-    def process_incoming_word(self, word: Word) -> Optional[List[Word]]:
+    def process_incoming_word(self, word: Word) -> list[Word] | None:
         """
         Process an incoming ARINC 429 word and advance the FSM state.
 
         Returns:
-            List[Word]: Words to transmit back on the bus, or None if no response is required.
+            list[Word]: Words to transmit back on the bus, or None if no response is required.
         """
         # Non-control word handling
         if word.label != self.LABEL_CONTROL:
@@ -166,9 +156,6 @@ class WilliamsburgSession:
 
         control_code, param = self._parse_control_word(word)
 
-        # -------------------------------------------------------------
-        # RECEIVER ROLE FSM
-        # -------------------------------------------------------------
         if not self.is_transmitter:
             if self.state == WilliamsburgState.IDLE and control_code == WilliamsburgControlCode.SAL:
                 self.expected_length = param
@@ -209,10 +196,6 @@ class WilliamsburgSession:
                 # Validation Passed -> Acknowledge transfer and return to IDLE
                 self.state = WilliamsburgState.IDLE
                 return [self._build_control_word(WilliamsburgControlCode.ACK, 0)]
-
-        # -------------------------------------------------------------
-        # TRANSMITTER ROLE FSM
-        # -------------------------------------------------------------
         else:
             if self.state == WilliamsburgState.WAIT_RTS and control_code == WilliamsburgControlCode.RTS:
                 self.state = WilliamsburgState.SENDING_BLOCK
@@ -254,7 +237,7 @@ class WilliamsburgSession:
 
         return None
 
-    def get_received_data(self) -> Optional[bytes]:
+    def get_received_data(self) -> bytes | None:
         """
         Returns the reconstructed payload if a transfer completed successfully.
         """
@@ -262,10 +245,7 @@ class WilliamsburgSession:
             return bytes(self.rx_buffer[: self.expected_length])
         return None
 
-    # -----------------------------------------------------------------
-    # INTERNAL HELPERS
-    # -----------------------------------------------------------------
-    def _build_control_word(self, code: WilliamsburgControlCode, param: int) -> Word:
+   def _build_control_word(self, code: WilliamsburgControlCode, param: int) -> Word:
         """
         Packs [4-bit Code | 16-bit Parameter/CRC] into 19-bit DATA field (bits 11-29).
         """
@@ -275,140 +255,24 @@ class WilliamsburgSession:
         w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, packed_val)
         return w
 
-    def _parse_control_word(self, word: Word) -> Tuple[WilliamsburgControlCode, int]:
+    def _parse_control_word(self, word: Word) -> tuple[WilliamsburgControlCode, int]:
         raw_val = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
         code_val = (raw_val >> 15) & 0xF
         param = raw_val & 0xFFFF
-        return WilliamsburgControlCode(code_val), param
 
-    def _encode_payload_chunks(self, data: bytes) -> List[Word]:
+        try:
+            code = WilliamsburgControlCode(code_val)
+        except ValueError:
+            raise UnexpectedLabel(f"Unknown control code {code_val}")
+
+        return code, param
+
+    def _encode_payload_chunks(self, data: bytes) -> list[Word]:
         words = []
         for i in range(0, len(data), 2):
-            chunk = data[i : i + 2].ljust(2, b"\x00")
+            chunk = data[i: i + 2].ljust(2, b"\x00")
             w = Word()
             w.label = self.LABEL_DATA
             w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, int.from_bytes(chunk, "big"))
             words.append(w)
-        return words
-
-
-@dataclass
-class WilliamsburgReceiver:
-    """
-    Reassembles legacy multi-word Williamsburg block transfers (backward compatibility).
-    """
-
-    strict: bool = False
-    pad_byte: int = 0x00
-
-    LABEL_SOF: int = 0o144
-    LABEL_EOF: int = 0o145
-    LABEL_DATA: int = 0o146
-
-    def __post_init__(self) -> None:
-        self.buffer = bytearray()
-        self.assembling = False
-        self.expected_length: int | None = None
-
-    def _error(self, exc: Exception) -> None:
-        if self.strict:
-            raise exc
-        self.buffer.clear()
-        self.assembling = False
-        self.expected_length = None
-
-    def process_word(self, word: Word) -> bytes | None:
-        """
-        Process a single ARINC 429 word using the legacy passive rules.
-        Returns a completed block when EOF is received.
-        """
-        label = word.label
-
-        if label == self.LABEL_SOF:
-            self.buffer.clear()
-            self.assembling = True
-            self.expected_length = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
-            return None
-
-        if not self.assembling:
-            if label == self.LABEL_DATA:
-                self._error(DataBeforeSOF())
-            elif label == self.LABEL_EOF:
-                self._error(EOFBeforeSOF())
-            else:
-                self._error(UnexpectedLabel(label))
-            return None
-
-        if label == self.LABEL_DATA:
-            value = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
-            self.buffer.extend(value.to_bytes(2, "big"))
-            return None
-
-        if label == self.LABEL_EOF:
-            self.assembling = False
-
-            if self.expected_length is None:
-                return bytes(self.buffer)
-
-            if self.strict and len(self.buffer) < self.expected_length:
-                raise LengthMismatch(
-                    f"Expected {self.expected_length} bytes, got {len(self.buffer)}"
-                )
-
-            return bytes(self.buffer[: self.expected_length])
-
-        self._error(UnexpectedLabel(label))
-        return None
-
-
-@dataclass
-class WilliamsburgTransmitter:
-    """
-    Splits a byte stream into legacy Williamsburg block-transfer ARINC 429 words (backward compatibility).
-    """
-
-    chunk_size: int = 2
-    pad_byte: int = 0x00
-
-    LABEL_SOF: int = 0o144
-    LABEL_EOF: int = 0o145
-    LABEL_DATA: int = 0o146
-
-    def __post_init__(self) -> None:
-        if self.chunk_size <= 0:
-            raise ValueError("chunk_size must be > 0")
-        if self.chunk_size > 2:
-            raise ValueError("chunk_size must be <= 2 for 19-bit DATA field")
-
-    def _chunk(self, data: bytes) -> Iterable[bytes]:
-        for i in range(0, len(data), self.chunk_size):
-            yield data[i : i + self.chunk_size]
-
-    def encode(self, data: bytes) -> list[Word]:
-        """
-        Convert a byte sequence into legacy Williamsburg ARINC 429 words.
-        """
-        words: list[Word] = []
-
-        # SOF
-        sof = Word()
-        sof.label = self.LABEL_SOF
-        sof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, len(data))
-        words.append(sof)
-
-        # DATA
-        for block in self._chunk(data):
-            w = Word()
-            w.label = self.LABEL_DATA
-            padded = block.ljust(2, bytes([self.pad_byte]))
-            value = int.from_bytes(padded, "big")
-            w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, value)
-            words.append(w)
-
-        # EOF
-        eof = Word()
-        eof.label = self.LABEL_EOF
-        eof.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, 0)
-        words.append(eof)
-
         return words
