@@ -44,6 +44,11 @@ def main() -> None:
     icd_parser = subparsers.add_parser("load-icd", help="Load custom label definitions from an ICD JSON file.")
     icd_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
 
+    # Bus simulation command
+    sim_bus_parser = subparsers.add_parser("simulate", help="Run a live multi-node ARINC 429 bus simulation.")
+    sim_bus_parser.add_argument("--duration", type=float, default=2.0, help="Simulation duration in seconds.")
+    sim_bus_parser.add_argument("--faulty", action="store_true", help="Introduce a faulty node to test parity and error monitoring.")
+
     args = parser.parse_args()
 
     if args.command == "decode":
@@ -179,6 +184,53 @@ def main() -> None:
         except Exception as e:
             print(f"Error loading ICD file: {e}")
             raise SystemExit(1)
+
+    elif args.command == "simulate":
+        from arinc429.sim import ArincBus, VirtualNode, BusMonitor, FaultConfig, FaultyVirtualNode, stop_all
+        from arinc429.builder import WordBuilder
+        import time
+
+        print("Initializing ARINC 429 Bus Simulation...")
+        bus = ArincBus()
+        monitor = BusMonitor("SYSTEM_MONITOR", bus)
+
+        adc_node = VirtualNode("ADC_1", bus)
+        adc_node.register_periodic_transmission(
+            lambda: WordBuilder().label(0o203).data(0x1234).build(), rate_hz=20.0
+        )
+
+        irs_node = VirtualNode("IRS_1", bus)
+        irs_node.register_periodic_transmission(
+            lambda: WordBuilder().label(0o310).data(0x5678).build(), rate_hz=10.0
+        )
+
+        nodes = [adc_node, irs_node]
+
+        if args.faulty:
+            fault_cfg = FaultConfig(corrupt_parity=True, drop_probability=0.1)
+            faulty_node = FaultyVirtualNode("FAULTY_SENSOR", bus, fault_cfg)
+            faulty_node.register_periodic_transmission(
+                lambda: WordBuilder().label(0o101).data(0xFFFF).build(), rate_hz=15.0
+            )
+            nodes.append(faulty_node)
+            print("Fault injection enabled: FAULTY_SENSOR active.")
+
+        for n in nodes:
+            n.start()
+
+        print(f"Simulation running for {args.duration} seconds...")
+        time.sleep(args.duration)
+
+        stop_all(nodes)
+
+        print("\n--- Simulation Summary ---")
+        print(f"Total words captured on bus : {len(monitor.captured_words)}")
+        print(f"Parity errors detected      : {monitor.parity_errors_detected}")
+        print("Traffic Breakdown by Label:")
+        for label in [0o203, 0o310, 0o101]:
+            words = monitor.get_traffic_by_label(label)
+            if words:
+                print(f"  - Label {label:03o}: {len(words)} messages received")
 
 
 if __name__ == "__main__":
