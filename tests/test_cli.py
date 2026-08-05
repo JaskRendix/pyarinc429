@@ -384,3 +384,56 @@ def test_simulate_invalid_duration():
     result = run_cli(["simulate", "--duration", "-1"])
     # argparse rejects negative float → exit code 2
     assert result.returncode != 0
+
+
+def test_replay_basic(tmp_path):
+    # Create a fake recording
+    log = tmp_path / "record.jsonl"
+    log.write_text(
+        json.dumps({
+            "timestamp": time.time(),
+            "word_int": 0x9c000c26,
+            "parity_type": Word.ODD_PARITY,
+            "source_id": "SRC"
+        }) + "\n",
+        encoding="utf-8"
+    )
+
+    # Run CLI replay
+    result = run_cli(["replay", str(log), "--speed", "1.0"])
+    assert result.returncode == 0
+
+    out = result.stdout
+
+    # Expected markers
+    assert "Loading record file" in out
+    assert "Starting playback" in out
+    assert "Replay Summary" in out
+    assert "Total words replayed/captured" in out
+    assert "Replay session completed" in out
+
+
+def test_replay_with_speed(tmp_path):
+    log = tmp_path / "record.jsonl"
+    log.write_text(
+        json.dumps({
+            "timestamp": time.time(),
+            "word_int": 0x9c000c26,
+            "parity_type": Word.ODD_PARITY,
+            "source_id": "SRC"
+        }) + "\n",
+        encoding="utf-8"
+    )
+
+    result = run_cli(["replay", str(log), "--speed", "2.5"])
+    assert result.returncode == 0
+
+    out = result.stdout
+    assert "Starting playback" in out
+    assert "Replay session completed" in out
+
+
+def test_replay_file_not_found():
+    result = run_cli(["replay", "no_such_file.jsonl"])
+    assert result.returncode != 0
+    assert "Record file not found" in result.stdout or "Error" in result.stdout
