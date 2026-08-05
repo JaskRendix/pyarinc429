@@ -18,7 +18,7 @@ from .datatypes.discrete import Discrete
 from .definitions import EQUIP_ADC, EQUIP_IRS, LabelDefinition
 from .errors import ARINC429Error, FieldOverflowError
 from .loader import Arinc615Packetizer
-from .williamsburg import WilliamsburgReceiver, WilliamsburgTransmitter
+from .williamsburg import WilliamsburgSession
 from .word import Word
 
 __all__ = [
@@ -41,7 +41,6 @@ __all__ = [
     "EQUIP_ADC",
     "EQUIP_IRS",
     "Arinc615Packetizer",
-    "WilliamsburgReceiver",
-    "WilliamsburgTransmitter",
+    "WilliamsburgSession",
     "WordBuilder",
 ]
