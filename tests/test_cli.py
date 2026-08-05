@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 import time
 
+from arinc429.word import Word
 
 def run_cli(args):
     """Run the pyarinc CLI and return subprocess.CompletedProcess."""
