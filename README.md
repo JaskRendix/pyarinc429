@@ -1,6 +1,6 @@
-# PyARINC429
+# pyarinc429
 
-PyARINC429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
+pyarinc429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
 It provides Python types and utilities for encoding and decoding ARINC 429 words, ARINC 615 framing, and a complete Williamsburg block‑transfer engine.
 
 **Original repository:** [https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
@@ -186,13 +186,13 @@ custom = combine_definitions(EQUIP_ADC, EQUIP_IRS)
 
 ## ARINC615 packetizer
 
-A simple framing model for ARINC 615 byte streams.
+A framing model for ARINC 615 byte streams.
 
-- SOF carries payload length.  
-- DATA words carry 2 bytes each.  
-- Final block is padded.  
-- EOF carries zero.  
-- `decode()` reconstructs the payload using the SOF length.
+- SOF carries payload length  
+- DATA words carry 2 bytes  
+- Final block is padded  
+- EOF carries zero  
+- `decode()` reconstructs the payload using the SOF length
 
 Example:
 
@@ -209,7 +209,7 @@ assert decoded == b"HELLO"
 
 ## Williamsburg protocol engine
 
-`williamsburg.py` implements a complete ARINC 429 Williamsburg block‑transfer state machine.
+`williamsburg.py` implements the ARINC 429 Williamsburg block‑transfer state machine.
 
 Features:
 
