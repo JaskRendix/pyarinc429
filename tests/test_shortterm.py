@@ -7,7 +7,7 @@ from arinc429.errors import FieldOverflowError
 
 def test_word_validate_passes_for_default_word():
     w = Word()
-    # Ensure parity is validly computed so validation passes
+    w.label = 0o101
     assert w.validate() is None
 
 
