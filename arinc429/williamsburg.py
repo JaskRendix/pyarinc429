@@ -244,7 +244,7 @@ class WilliamsburgSession:
             return bytes(self.rx_buffer[: self.expected_length])
         return None
 
-   def _build_control_word(self, code: WilliamsburgControlCode, param: int) -> Word:
+    def _build_control_word(self, code: WilliamsburgControlCode, param: int) -> Word:
         """
         Packs [4-bit Code | 16-bit Parameter/CRC] into 19-bit DATA field (bits 11-29).
         """
