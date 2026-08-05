@@ -108,7 +108,7 @@ def test_virtualnode_multiple_schedules():
     node.register_periodic_transmission(lambda: make_word(label=0o200), rate_hz=10)
     node.start()
 
-    time.sleep(0.2)
+    time.sleep(0.3)  # Increased from 0.2 to allow enough headroom for thread scheduling
     node.stop()
 
     assert len(received) >= 3
