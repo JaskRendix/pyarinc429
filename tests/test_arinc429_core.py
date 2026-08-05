@@ -79,7 +79,7 @@ def test_invalid_bitfield_range():
 
 
 def test_parity_odd_even_switching():
-    w = Word(0, parity_type=Word.ODD_PARITY)
+    w = Word(0x12345678, parity_type=Word.ODD_PARITY)
     odd_parity = w.parity
 
     w.parity_type = Word.EVEN_PARITY
@@ -89,9 +89,9 @@ def test_parity_odd_even_switching():
 
 
 def test_parity_updates_on_data_change():
-    w = Word()
+    w = Word(0x12345678)
     p1 = w.parity
-    w.data = 0x12345
+    w.data = 0x7FFFF
     p2 = w.parity
     assert p1 != p2
 
