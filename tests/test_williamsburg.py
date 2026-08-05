@@ -4,29 +4,13 @@ import pytest
 
 from arinc429 import DATA_BITS, Word
 from arinc429.williamsburg import (
-    DataBeforeSOF,
-    EOFBeforeSOF,
-    LengthMismatch,
     NakReason,
-    UnexpectedLabel,
     WilliamsburgControlCode,
     WilliamsburgError,
     WilliamsburgSession,
     WilliamsburgState,
     crc16_ccitt,
 )
-
-
-def extract_payload(words: list[Word], strict: bool = False) -> bytes | None:
-    rx = WilliamsburgSession(is_transmitter=False)
-    # If strict option needs to be supported, you can handle it or map it as needed
-    result = None
-    for w in words:
-        out = rx.process_incoming_word(w)
-        if out is not None:
-            # Check if received data is ready via get_received_data
-            pass
-    return rx.get_received_data()
 
 
 @pytest.mark.parametrize(
@@ -40,21 +24,16 @@ def extract_payload(words: list[Word], strict: bool = False) -> bytes | None:
     ],
 )
 def test_roundtrip_payload(data: bytes):
-    tx = WilliamsburgSession(is_transmitter=True)
-    rx = WilliamsburgSession(is_transmitter=False)
-
-    sal = tx.initiate_transfer(data)
-    rts = rx.process_incoming_word(sal[0])
-    transfer = tx.initiate_transfer(data) if data == b"" else tx.process_incoming_word(rts[0])
-    
-    # Standard full flow simulation loop
     tx_session = WilliamsburgSession(is_transmitter=True)
     rx_session = WilliamsburgSession(is_transmitter=False)
-    
+
     sal_words = tx_session.initiate_transfer(data)
     rts_words = rx_session.process_incoming_word(sal_words[0])
+    assert rts_words is not None
+
     transfer_words = tx_session.process_incoming_word(rts_words[0])
-    
+    assert transfer_words is not None
+
     ack_words = None
     for w in transfer_words:
         res = rx_session.process_incoming_word(w)
@@ -69,8 +48,6 @@ def test_roundtrip_payload(data: bytes):
 
 def test_data_field_encoding_two_bytes():
     tx_session = WilliamsburgSession(is_transmitter=True)
-    words = tx_session.initiate_transfer(b"AB")
-    # Test encoding chunks directly via private helper or full sequence
     chunks = tx_session._encode_payload_chunks(b"AB")
     value = chunks[0].get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
     assert value.to_bytes(2, "big") == b"AB"
@@ -144,6 +121,7 @@ def test_session_crc_mismatch_triggers_nak():
     sal = tx_session.initiate_transfer(payload)
     rts = rx_session.process_incoming_word(sal[0])
     transfer = tx_session.process_incoming_word(rts[0])
+    assert transfer is not None
 
     # Tamper with a data word in the stream
     for w in transfer:
@@ -174,6 +152,7 @@ def test_session_buffer_overflow_triggers_nak():
     sal = tx_session.initiate_transfer(payload)
     rts = rx_session.process_incoming_word(sal[0])
     transfer = tx_session.process_incoming_word(rts[0])
+    assert transfer is not None
 
     # Feed extra data words before EOF to simulate overflow / length mismatch
     extra_word = Word()
