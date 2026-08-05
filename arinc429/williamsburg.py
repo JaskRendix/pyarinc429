@@ -170,8 +170,10 @@ class WilliamsburgSession:
                 # EOF received: Verify payload length and CRC-16
                 received_crc = param
 
-                # 1. Length Check (Underflow or Overflow)
-                if len(self.rx_buffer) != self.expected_length:
+                # 1. Length Check: Since payload is chunked into 2-byte words, 
+                # the rx_buffer can be padded up to 1 byte longer than expected_length if expected_length is odd.
+                # We check if rx_buffer is shorter than expected, or if it exceeds expected by more than 1 byte (or padding misalignment).
+                if len(self.rx_buffer) < self.expected_length or len(self.rx_buffer) > self.expected_length + 1:
                     self.state = WilliamsburgState.ERROR
                     return [
                         self._build_control_word(
