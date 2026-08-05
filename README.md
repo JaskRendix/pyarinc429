@@ -1,7 +1,7 @@
 # PyARINC429
 
 PyARINC429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
-It provides Python types and utilities for encoding and decoding ARINC 429 words, along with extended support for ARINC 615 framing and a complete Williamsburg block‑transfer engine.
+It provides Python types and utilities for encoding and decoding ARINC 429 words, ARINC 615 framing, and a complete Williamsburg block‑transfer engine.
 
 **Original repository:** [https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
 
@@ -42,6 +42,7 @@ arinc429/
         discrete.py
     loader.py
     williamsburg.py
+    cli.py
 ```
 
 ---
@@ -253,4 +254,60 @@ w = Word()
 errors = w.validate(raise_on_error=False)
 if errors:
     print(errors)
+```
+
+---
+
+## CLI
+
+The project provides a command‑line interface under the executable name `pyarinc`.
+
+### Decode a raw ARINC 429 word
+
+```bash
+pyarinc decode 0x9c000c26
+```
+
+JSON output:
+
+```bash
+pyarinc decode 0x9c000c26 --json
+```
+
+Select equipment profile:
+
+```bash
+pyarinc decode 0x9c000c26 --profile adc
+```
+
+### ARINC 615 packetization
+
+Encode a string:
+
+```bash
+pyarinc arinc615-encode "HELLO"
+```
+
+Encode a file:
+
+```bash
+pyarinc arinc615-encode --file payload.bin
+```
+
+Write output to JSON:
+
+```bash
+pyarinc arinc615-encode "HELLO" --output words.json
+```
+
+### Williamsburg block‑transfer simulation
+
+```bash
+pyarinc williamsburg-simulate "HELLO"
+```
+
+Trace control‑word sequence:
+
+```bash
+pyarinc williamsburg-simulate "HELLO" --trace
 ```
