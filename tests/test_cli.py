@@ -449,3 +449,61 @@ def test_replay_file_not_found():
     # stdout still prints the summary
     assert "replay summary" in out
     assert "replay session completed" in out
+
+
+def test_generate_cli_success(tmp_path):
+    icd_file = tmp_path / "icd.json"
+    icd_file.write_text(
+        json.dumps({
+            "labels": [
+                {
+                    "label": "0o203",
+                    "name": "Pressure Altitude",
+                    "system": "ADC",
+                    "category": "Air Data",
+                    "fields": [
+                        {"name": "Altitude", "lsb": 11, "msb": 28, "type": "BNR", "resolution": 1.0, "unit": "ft"}
+                    ],
+                }
+            ]
+        }),
+        encoding="utf-8",
+    )
+
+    out_file = tmp_path / "generated_icd.py"
+    result = run_cli(["generate", str(icd_file), "--output", str(out_file)])
+    
+    assert result.returncode == 0
+    assert out_file.exists()
+    
+    content = out_file.read_text(encoding="utf-8")
+    assert "PressureAltitudeData" in content
+    assert "ICD_REGISTRY" in content
+    assert "decode_icd_word" in content
+
+
+def test_generate_cli_stdout(tmp_path):
+    icd_file = tmp_path / "icd.json"
+    icd_file.write_text(
+        json.dumps({
+            "labels": [
+                {
+                    "label": 123,
+                    "name": "Simple Label",
+                    "system": "SYS",
+                    "category": "Cat"
+                }
+            ]
+        }),
+        encoding="utf-8",
+    )
+
+    result = run_cli(["generate", str(icd_file)])
+    assert result.returncode == 0
+    assert "SimpleLabelData" in result.stdout or "ICD_REGISTRY" in result.stdout
+
+
+def test_generate_cli_file_not_found():
+    result = run_cli(["generate", "non_existent_icd.json"])
+    assert result.returncode != 0
+    assert "Error" in result.stderr or "Error" in result.stdout
