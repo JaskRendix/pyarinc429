@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Literal
 
 from arinc429.bitfields import DATA_BITS
-from arinc429.decode import decode_field
+from arinc429.decoding import decode_field
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
 from arinc429.word import Word
 
@@ -99,6 +99,7 @@ def decode_word(
 
     for field in definition.fields:
         decoded = decode_field(word, field)
+
         if decoded is None:
             unknown_fields.append(field.name)
             continue

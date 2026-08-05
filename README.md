@@ -1,13 +1,14 @@
-# pyarinc429
+# **pyarinc429**
 
-pyarinc429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
-It provides Python types and utilities for encoding/decoding ARINC 429 words, ARINC 615 framing, Williamsburg block‑transfer, ICD metadata loading, and a full ARINC 429 **simulation engine**.
+`pyarinc429` is a separate ARINC 429 library derived from the original implementation by Jason Hodge.  
+It expands the original project with additional ARINC 429 utilities, ICD metadata handling, ICD‑driven code generation, ARINC 615 framing, Williamsburg block‑transfer, and a full ARINC 429 simulation engine.
 
-**Original repository:** https://github.com/aeroneous/PyARINC429
+**Original repository:**  
+[https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
 
 ---
 
-## Installation
+## **Installation**
 
 ```bash
 git clone https://github.com/JaskRendix/pyarinc429
@@ -24,7 +25,7 @@ pytest
 
 ---
 
-## Package layout
+## **Package layout**
 
 ```text
 arinc429/
@@ -45,8 +46,10 @@ arinc429/
     williamsburg.py
     icd.py
     sim.py
+    drivers.py
     cli.py
 examples/
+    README.md
     flight_sim.py
     multi_fault_sim.py
     high_rate_stress_test.py
@@ -56,11 +59,11 @@ examples/
 
 ---
 
-## Word
+# **Word**
 
-Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and parity handling.
+`Word` represents a 32‑bit ARINC 429 word with full bit‑field access and parity handling.
 
-**Properties:**
+Fields:
 
 - label  
 - sdi  
@@ -71,29 +74,26 @@ Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and pari
 - parity_ok  
 - raw  
 
-**Methods:**
+Methods:
 
-- get_bit_field(lsb, msb)  
-- set_bit_field(lsb, msb, value)  
-- from_int(value, parity_type)  
-- to_int()  
-- copy()  
-- with_fields(label=…, sdi=…, data=…, ssm=…)  
-- as_dict()  
-- to_json(indent=None)  
-- validate(raise_on_error=False)  
-
-Bit‑field operations enforce range checks and recompute parity.
+- `get_bit_field(lsb, msb)`  
+- `set_bit_field(lsb, msb, value)`  
+- `from_int(value, parity_type)`  
+- `to_int()`  
+- `copy()`  
+- `with_fields(...)`  
+- `as_dict()`  
+- `to_json()`  
+- `validate()`  
 
 ---
 
-## WordBuilder
+# **WordBuilder**
 
 Fluent builder for constructing valid ARINC 429 words.
 
 ```python
 from arinc429.builder import WordBuilder
-from arinc429.word import Word
 
 w = (
     WordBuilder()
@@ -109,24 +109,26 @@ w = (
 
 ---
 
-## Data types
+# **Datatypes**
 
 Typed helpers for decoding ARINC 429 numeric formats:
 
-- **BCD** — Binary Coded Decimal  
-- **BNR** — Binary Number Representation  
-- **Discrete** — 2‑bit status matrix  
+- BCD  
+- BNR  
+- Discrete  
 
-Each type supports:
+Each datatype supports:
 
-- `.decoded` / `.encoded`  
-- `.resolution`  
-- `__int__`, `__float__`  
-- `.as_dict()` / `.to_json()`  
+- encoded / decoded values  
+- resolution  
+- numeric conversion  
+- JSON serialization  
 
 ---
 
-## Label metadata
+# **Label metadata**
+
+Metadata for ARINC 429 labels:
 
 ```python
 LabelInfo(label, name, system, category, direction=None, description=None)
@@ -137,7 +139,9 @@ require_label_info()
 
 ---
 
-## Definitions
+# **Definitions**
+
+Structures for ICD‑driven decoding:
 
 ```python
 FieldDefinition(name, lsb, msb, type, resolution=None, unit=None)
@@ -150,20 +154,16 @@ Equipment sets:
 - `EQUIP_IRS`  
 - `EQUIP_ALL`  
 
----
-
-## High‑level API
+Combine sets:
 
 ```python
 from arinc429.api import combine_definitions
-from arinc429.definitions import EQUIP_ADC, EQUIP_IRS
-
 custom = combine_definitions(EQUIP_ADC, EQUIP_IRS)
 ```
 
 ---
 
-## ARINC 615 packetizer
+# **ARINC 615 packetizer**
 
 ```python
 from arinc429.loader import Arinc615Packetizer
@@ -175,13 +175,13 @@ decoded = Arinc615Packetizer.decode(words)
 
 ---
 
-## Williamsburg protocol engine
+# **Williamsburg protocol engine**
 
 Implements the ARINC 429 Williamsburg block‑transfer state machine with CRC‑16‑CCITT, padding, and control‑word sequencing.
 
 ---
 
-## ICD loader
+# **ICD loader**
 
 ```python
 from arinc429.icd import load_icd_json
@@ -190,22 +190,43 @@ labels = load_icd_json("icd.json")
 
 ---
 
-# Simulation Engine (`arinc429.sim`)
+# **ICD code generator**
 
-Provides a full ARINC 429 virtual databus.
+Generate Python dataclasses and decoders from an ICD JSON file:
 
-### Core components
+```bash
+pyarinc generate icd.json
+pyarinc generate icd.json --output custom_icd.py
+```
 
-- **ArincBus** — thread‑safe shared bus with timestamped logging  
-- **VirtualNode** — periodic transmitter/receiver node  
-- **BusMonitor** — passive sniffer with parity tracking and label filtering  
-- **FaultConfig** — configuration for fault injection (drops, bit flips, parity)  
-- **FaultyVirtualNode** — node that applies configured faults  
-- **BusRecorder** — exports captured traffic to JSONL  
-- **ReplayNode** — replays recorded JSONL traffic with original timing and speed scaling  
-- **stop_all()** — clean shutdown helper for multiple nodes  
+The generated module contains:
 
-### Example usage
+- one dataclass per label  
+- a `from_word()` decoder for each dataclass  
+- an `ICD_REGISTRY` mapping label → dataclass  
+- a `decode_icd_word()` helper  
+
+BNR fields are sign‑extended from their defined width.  
+BCD fields derive their sign from SSM bits.
+
+---
+
+# **Simulation engine (`arinc429.sim`)**
+
+Provides a virtual ARINC 429 databus.
+
+Components:
+
+- `ArincBus`  
+- `VirtualNode`  
+- `BusMonitor`  
+- `FaultConfig`  
+- `FaultyVirtualNode`  
+- `BusRecorder`  
+- `ReplayNode`  
+- `stop_all()`  
+
+Example:
 
 ```python
 from arinc429.sim import ArincBus, VirtualNode, BusMonitor, BusRecorder, ReplayNode, stop_all
@@ -226,26 +247,38 @@ adc.start()
 time.sleep(1.0)
 stop_all([adc])
 
-# Record to JSONL
 log_file = Path("record.jsonl")
 BusRecorder.export_to_jsonl(monitor.captured_words, log_file)
 
-# Replay onto a fresh bus
 replay_bus = ArincBus()
 replay_monitor = BusMonitor("REPLAY_MON", replay_bus)
-player = ReplayNode(log_file, replay_bus, speed_multiplier=2.0)
-player.play()
+ReplayNode(log_file, replay_bus, speed_multiplier=2.0).play()
 ```
 
 ---
 
-# CLI (`pyarinc`)
+# **Hardware drivers (`arinc429.drivers`)**
 
-The project provides a command‑line interface under the executable name `pyarinc`.
+Transport layer:
+
+- `ArincTransport`  
+- `SerialTransport`  
+- `SocketTransport`  
+
+Driver layer:
+
+- `BaseArincDriver`  
+- `AsyncBusTransportDriver`  
+
+Drivers bridge physical ARINC 429 hardware (serial adapters, UDP/TCP gateways) with the virtual bus.
 
 ---
 
-## Decode a raw ARINC 429 word
+# **CLI (`pyarinc`)**
+
+Command‑line interface for decoding, packetizing, Williamsburg simulation, ICD loading, ICD code generation, and bus simulation.
+
+### Decode a raw word
 
 ```bash
 pyarinc decode 0x9c000c26
@@ -253,137 +286,59 @@ pyarinc decode 0x9c000c26 --json
 pyarinc decode 0x9c000c26 --profile adc --parity even
 ```
 
----
-
-## ARINC 615 packetization
+### ARINC 615 packetization
 
 ```bash
 pyarinc arinc615-encode "HELLO"
 pyarinc arinc615-encode --file payload.bin
-pyarinc arinc615-encode "HELLO" --output words.json
 ```
 
----
-
-## Williamsburg block‑transfer simulation
+### Williamsburg simulation
 
 ```bash
 pyarinc williamsburg-simulate "HELLO"
-pyarinc williamsburg-simulate "HELLO" --trace
 ```
 
----
-
-## Load ICD metadata
+### Load ICD metadata
 
 ```bash
 pyarinc load-icd icd.json
 ```
 
-## Generate Python module from an ICD
+### Generate ICD module
 
 ```bash
 pyarinc generate icd.json
 pyarinc generate icd.json --output custom_icd.py
 ```
 
-Emits a Python module with one typed dataclass per label (including a
-`from_word` decoder), an `ICD_REGISTRY` mapping label → dataclass, and a
-`decode_icd_word()` helper. BNR fields are sign-extended from their field
-width and BCD fields take their sign from the word SSM bits.
-
----
-
-## Bus simulation (CLI)
+### Bus simulation
 
 ```bash
 pyarinc simulate --duration 2.0
 pyarinc simulate --duration 2.0 --faulty
 ```
 
-Spins up:
-
-- ADC node  
-- IRS node  
-- optional faulty node  
-- BusMonitor  
-- periodic transmissions  
-- parity/error tracking  
-- summary report  
-
----
-
-## Replay recorded traffic (CLI)
+### Replay recorded traffic
 
 ```bash
 pyarinc replay flight_recording.jsonl --speed 1.0
-pyarinc replay flight_recording.jsonl --speed 2.0
 ```
 
-This:
-
-- loads a JSONL recording created by `BusRecorder` or the examples  
-- replays words onto a virtual bus at the requested speed multiplier  
-- logs replayed traffic via `BusMonitor`  
-- prints a replay summary and total words captured  
-
 ---
 
-# Examples
+# **Examples**
 
-Five complete examples are included under `examples/`.
+See:
 
----
+```
+examples/README.md
+```
 
-## 1. Flight Simulation (`flight_sim.py`)
+for descriptions of:
 
-Simulates:
-
-- ADC altitude  
-- IRS heading  
-- FMC receiving both  
-- BusMonitor auditing  
-- Faulty ADC injected mid‑flight  
-
----
-
-## 2. Multi‑Fault Scenario (`multi_fault_sim.py`)
-
-Simulates compound failures:
-
-- parity corruption  
-- bit flips  
-- wrong labels  
-- packet drops  
-- silent node  
-
----
-
-## 3. High‑Rate Stress Test (`high_rate_stress_test.py`)
-
-Simulates extreme bus load:
-
-- nodes transmitting at 100–500 Hz  
-- faulty node at 150 Hz  
-- saturation behavior  
-- throughput measurement  
-
----
-
-## 4. Datatypes Integration (`datatypes_integration.py`)
-
-Demonstrates decoding raw ARINC 429 data into engineering units using `BNR`, `BCD`, and `Discrete` datatypes.
-
----
-
-## 5. Record & Replay Demo (`record_and_replay.py`)
-
-Demonstrates:
-
-- recording live bus traffic via `BusRecorder`  
-- exporting to JSONL  
-- replaying the recorded traffic via `ReplayNode` at 2× speed  
-- auditing replayed traffic with `BusMonitor`  
-- cleaning up the temporary log file  
-
-Shows how the simulation engine, recorder, and replay components fit together end‑to‑end.
+- `flight_sim.py`  
+- `multi_fault_sim.py`  
+- `high_rate_stress_test.py`  
+- `datatypes_integration.py`  
+- `record_and_replay.py`  

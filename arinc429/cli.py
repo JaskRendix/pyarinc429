@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
+import time
 from pathlib import Path
 
 from arinc429.api import combine_definitions, decode_and_validate
@@ -199,6 +201,11 @@ def main() -> None:
         from arinc429.icd import generate_icd_code
         try:
             code = generate_icd_code(args.icd_file)
+            if args.output:
+                args.output.write_text(code, encoding="utf-8")
+                print(f"Successfully generated typed ICD code → {args.output}")
+            else:
+                print(code)
         except Exception as e:
             print(f"Error generating code from ICD: {e}")
             raise SystemExit(1)
@@ -212,7 +219,6 @@ def main() -> None:
     elif args.command == "simulate":
         from arinc429.sim import ArincBus, VirtualNode, BusMonitor, FaultConfig, FaultyVirtualNode, stop_all
         from arinc429.builder import WordBuilder
-        import time
 
         print("Initializing ARINC 429 Bus Simulation...")
         bus = ArincBus()
@@ -258,8 +264,11 @@ def main() -> None:
 
     elif args.command == "replay":
         from arinc429.sim import ArincBus, BusMonitor
-        from arinc429.sim import ReplayNode
-        import time
+        from arinc429.recorder import ReplayNode
+
+        if args.speed <= 0:
+            print(f"Error: --speed must be positive, got {args.speed}")
+            raise SystemExit(1)
 
         if args.speed <= 0:
             print(f"Error: --speed must be positive, got {args.speed}")
@@ -272,7 +281,6 @@ def main() -> None:
         player = ReplayNode(args.record_file, bus, speed_multiplier=args.speed)
 
         print("Starting playback...")
-        import threading
         t = threading.Thread(target=player.play, daemon=True)
         t.start()
 
