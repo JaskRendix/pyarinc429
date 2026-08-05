@@ -171,8 +171,8 @@ class WilliamsburgSession:
                 received_crc = param
                 actual_payload = bytes(self.rx_buffer[: self.expected_length])
 
-                # 1. Length Check
-                if len(self.rx_buffer) < self.expected_length:
+                # 1. Length Check (Underflow or Overflow)
+                if len(self.rx_buffer) != self.expected_length:
                     self.state = WilliamsburgState.ERROR
                     return [
                         self._build_control_word(
@@ -240,7 +240,7 @@ class WilliamsburgSession:
         """
         Returns the reconstructed payload if a transfer completed successfully.
         """
-        if not self.is_transmitter and self.state == WilliamsburgState.IDLE and self.rx_buffer:
+        if not self.is_transmitter and self.state == WilliamsburgState.IDLE:
             return bytes(self.rx_buffer[: self.expected_length])
         return None
 
