@@ -482,7 +482,7 @@ def test_generate_cli_success(tmp_path):
     assert "decode_icd_word" in content
 
 
-def test_generate_cli_stdout(tmp_path):
+def test_generate_cli_default_output(tmp_path):
     icd_file = tmp_path / "icd.json"
     icd_file.write_text(
         json.dumps({
@@ -498,9 +498,19 @@ def test_generate_cli_stdout(tmp_path):
         encoding="utf-8",
     )
 
-    result = run_cli(["generate-icd-code", str(icd_file)])
-    assert result.returncode == 0
-    assert "SimpleLabelData" in result.stdout or "ICD_REGISTRY" in result.stdout
+    import os
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = run_cli(["generate-icd-code", str(icd_file)])
+        assert result.returncode == 0
+        assert "Successfully generated" in result.stdout
+        
+        default_out = tmp_path / "generated_icd.py"
+        assert default_out.exists()
+        assert "SimpleLabelData" in default_out.read_text(encoding="utf-8")
+    finally:
+        os.chdir(old_cwd)
 
 
 def test_generate_cli_file_not_found():
