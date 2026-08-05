@@ -220,11 +220,18 @@ class ReplayNode:
 
 class AsyncBusTransportDriver(BusListener):
 
-    def __init__(self, bus: ArincBus, transport: Any, source_id: str = "HW_DEVICE") -> None:
+    def __init__(
+        self,
+        bus: ArincBus,
+        transport: Any,
+        source_id: str = "HW_DEVICE",
+        error_callback: Callable[[Exception, str], None] | None = None
+    ) -> None:
         self.bus = bus
         self.transport = transport
         self.parser = ArincFrameParser()
         self.source_id = source_id
+        self.error_callback = error_callback
 
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -255,9 +262,9 @@ class AsyncBusTransportDriver(BusListener):
         try:
             payload = word.raw.to_bytes(4, "big")
             self.transport.write(payload)
-        except Exception:
-            error_word = Word.from_int(0)
-            self.bus.transmit(error_word, f"DRIVER_ERROR:{self.source_id}")
+        except Exception as e:
+            if self.error_callback:
+                self.error_callback(e, self.source_id)
 
     async def _rx_loop(self) -> None:
         while self._running:
@@ -270,9 +277,9 @@ class AsyncBusTransportDriver(BusListener):
                 else:
                     await asyncio.sleep(0.001)
 
-            except Exception:
-                error_word = Word.from_int(0)
-                self.bus.transmit(error_word, f"DRIVER_ERROR:{self.source_id}")
+            except Exception as e:
+                if self.error_callback:
+                    self.error_callback(e, self.source_id)
                 await asyncio.sleep(0.01)
 
 
