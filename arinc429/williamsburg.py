@@ -246,17 +246,17 @@ class WilliamsburgSession:
 
     def _build_control_word(self, code: WilliamsburgControlCode, param: int) -> Word:
         """
-        Packs [4-bit Code | 16-bit Parameter/CRC] into 19-bit DATA field (bits 11-29).
+        Packs [3-bit Code | 16-bit Parameter/CRC] into 19-bit DATA field (bits 11-29).
         """
         w = Word()
         w.label = self.LABEL_CONTROL
-        packed_val = ((code.value & 0xF) << 15) | (param & 0xFFFF)
+        packed_val = ((code.value & 0x7) << 16) | (param & 0xFFFF)
         w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, packed_val)
         return w
 
     def _parse_control_word(self, word: Word) -> tuple[WilliamsburgControlCode, int]:
         raw_val = word.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
-        code_val = (raw_val >> 15) & 0xF
+        code_val = (raw_val >> 16) & 0x7
         param = raw_val & 0xFFFF
 
         try:
