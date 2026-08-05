@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from .bitfields import DATA_BITS, LABEL_BITS, LSB, MSB, PARITY_BIT, SDI_BITS, SSM_BITS
@@ -20,17 +21,16 @@ class Word:
     def __init__(self, value: int = 0, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> None:
         if parity_type not in (self.EVEN_PARITY, self.ODD_PARITY):
             raise ValueError(f"Invalid parity type: {parity_type}")
-        self._value = 0
+        self._value = value & 0xFFFFFFFF
         self._parity_type = parity_type
         self._strict_parity = strict_parity
-        self._set_raw_preserving_parity(value)
 
         if self._strict_parity and not self.parity_ok:
             raise ValueError("Parity check failed under strict parity enforcement")
 
     @classmethod
     def from_int(cls, value: int, parity_type: int = ODD_PARITY, strict_parity: bool = False) -> Word:
-        """Create a Word from a raw 32‑bit integer."""
+        """Create a Word from a raw 32‑bit integer, preserving the stored parity bit."""
         return cls(value, parity_type, strict_parity=strict_parity)
 
     @classmethod
@@ -52,8 +52,7 @@ class Word:
         return self._value
 
     def copy(self) -> Word:
-        w = Word(self._value, self._parity_type, strict_parity=self._strict_parity)
-        return w
+        return Word(self._value, self._parity_type, strict_parity=self._strict_parity)
 
     def with_fields(self, **kwargs: Any) -> Word:
         w = self.copy()
@@ -68,18 +67,18 @@ class Word:
         return self._value
 
     def __bool__(self) -> bool:
-        return (self._value & 0x7FFFFFFF) != 0
+        return self._value != 0
 
     def __format__(self, fmt: str) -> str:
         return self._value.__format__(fmt)
 
     def __repr__(self) -> str:
-        return f"Word({self._value:#x})"
+        return f"Word({self._value:#010x})"
 
     def __str__(self) -> str:
         return (
-            f"Label={self.label:#o}, SDI={self.sdi}, Data={self.data:#x}, "
-            f"SSM={self.ssm}, Parity={self.parity}"
+            f"Label={self.label:#05o}, SDI={self.sdi}, Data={self.data:#x}, "
+            f"SSM={self.ssm}, Parity={self.parity} (OK={self.parity_ok})"
         )
 
     def __eq__(self, other: object) -> bool:
@@ -97,6 +96,7 @@ class Word:
             "data": self.data,
             "ssm": self.ssm,
             "parity": self.parity,
+            "parity_ok": self.parity_ok,
             "parity_type": self.parity_type,
             "raw": self._value,
         }
@@ -107,20 +107,17 @@ class Word:
 
     def to_json(self, indent: int | None = None) -> str:
         """Serialize the Word dictionary representation to a JSON string."""
-        import json
-
         return json.dumps(self.as_dict(), indent=indent)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Word:
-        """
-        Build a Word from a dict shaped like as_dict()'s output.
+        """Build a Word from a dictionary representation."""
+        parity_type = d.get("parity_type", cls.ODD_PARITY)
 
-        Only label/sdi/data/ssm/parity_type are honored when present;
-        'raw' and 'parity' are ignored since they are derived, not inputs.
-        Missing keys fall back to a zeroed word with ODD_PARITY.
-        """
-        w = cls(0, d.get("parity_type", cls.ODD_PARITY))
+        if "raw" in d:
+            return cls.from_int(d["raw"], parity_type=parity_type)
+
+        w = cls(0, parity_type=parity_type)
         if "label" in d:
             w.label = d["label"]
         if "sdi" in d:
@@ -171,6 +168,7 @@ class Word:
 
     @property
     def parity_ok(self) -> bool:
+        """Check if stored bit 32 parity matches the computed parity of bits 1–31."""
         count = (self._value & ((1 << 31) - 1)).bit_count()
         expected = (count + self._parity_type) % 2
         return expected == self.parity
@@ -198,7 +196,7 @@ class Word:
             raise ValueError("Bit length must be > 0")
 
         max_value = (1 << bit_length) - 1
-        min_value = ~(max_value >> 1)  # e.g. 5 bits → -16..15
+        min_value = ~(max_value >> 1)
 
         if not (min_value <= value <= max_value):
             raise FieldOverflowError(value, bit_length)
@@ -206,25 +204,21 @@ class Word:
     def validate(self, raise_on_error: bool = True) -> list[str] | None:
         errors: list[str] = []
 
-        # Label
         try:
             _ = self.label
         except Exception as exc:
             errors.append(str(exc))
 
-        # SDI / SSM
         if not (0 <= self.sdi <= 3):
             errors.append(f"SDI out of range: {self.sdi}")
         if not (0 <= self.ssm <= 3):
             errors.append(f"SSM out of range: {self.ssm}")
 
-        # DATA
         data_val = self.data
         max_data = (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1
         if not (0 <= data_val <= max_data):
             errors.append(f"DATA out of range: {data_val}")
 
-        # Parity
         if not self.parity_ok:
             errors.append("Parity bit does not match computed parity")
 
@@ -258,31 +252,19 @@ class Word:
 
         self._recompute_parity()
 
-    def _set_raw_preserving_parity(self, value: int) -> None:
-        """Set raw 32‑bit value without corrupting the parity bit."""
-        self._value = value & 0xFFFFFFFF
-        self._recompute_parity()
-
     def _recompute_parity(self) -> None:
-        """Recompute parity without destroying other bits."""
+        """Recompute bit 32 parity from bits 1–31."""
         parity_offset = PARITY_BIT.lsb - 1
-
-        # Count bits 1–31
         count = (self._value & ((1 << 31) - 1)).bit_count()
         parity_bit = (count + self._parity_type) % 2
 
-        # Clear parity bit
         self._value &= ~(1 << parity_offset)
-
-        # Set parity bit
         self._value |= parity_bit << parity_offset
 
     def decode_with_definition(
         self, definition: LabelDefinition, report_unknown: bool = False
     ):
-        """
-        Decode this ARINC 429 word using a multi-field LabelDefinition.
-        """
+        """Decode this ARINC 429 word using a multi-field LabelDefinition."""
         from .datatypes.bcd import BCD
         from .datatypes.bnr import BNR
         from .datatypes.discrete import Discrete
@@ -294,7 +276,7 @@ class Word:
             raw = self.get_bit_field(field.lsb, field.msb)
 
             if field.type == "BNR":
-                decoded = BNR.decode(raw, field.width, field.resolution)
+                decoded = BCD.decode(raw, field.width, field.resolution) if field.type == "BCD" else BNR.decode(raw, field.width, field.resolution)
             elif field.type == "BCD":
                 decoded = BCD.decode(raw, self.ssm, field.resolution)
             elif field.type == "DISCRETE":
