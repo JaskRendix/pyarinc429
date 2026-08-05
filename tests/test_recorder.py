@@ -9,9 +9,8 @@ import pytest
 from arinc429.sim import (
     ArincBus,
     BusMonitor,
-    BusRecorder,
-    ReplayNode,
 )
+from arinc429.recorder import BusRecorder, ReplayNode
 from arinc429.word import Word
 
 
