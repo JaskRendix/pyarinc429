@@ -118,7 +118,7 @@ def test_generate_icd_code_basic_bnr(tmp_path):
     w.label = label_int
     w.sdi = 1
     w.ssm = 2
-    w.data = 0x123456
+    w.data = 0x1234
 
     decoded = module.decode_icd_word(w)
     assert decoded is not None
@@ -209,7 +209,7 @@ def test_generate_icd_code_mixed_types(tmp_path):
     w.label = label_int
     w.sdi = 3
     w.ssm = 1
-    w.data = 0xFFFFFF
+    w.data = 0x12345
 
     decoded = module.decode_icd_word(w)
     assert decoded is not None
