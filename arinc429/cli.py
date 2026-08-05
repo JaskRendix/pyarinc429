@@ -44,6 +44,11 @@ def main() -> None:
     icd_parser = subparsers.add_parser("load-icd", help="Load custom label definitions from an ICD JSON file.")
     icd_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
 
+    # ICD Code Generation command
+    gen_parser = subparsers.add_parser("generate-icd-code", help="Generate typed Python dataclasses from an ICD JSON file.")
+    gen_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
+    gen_parser.add_argument("-o", "--output", type=Path, default=Path("generated_icd.py"), help="Output Python file path.")
+
     # Bus simulation command
     sim_bus_parser = subparsers.add_parser("simulate", help="Run a live multi-node ARINC 429 bus simulation.")
     sim_bus_parser.add_argument("--duration", type=float, default=2.0, help="Simulation duration in seconds.")
@@ -188,6 +193,16 @@ def main() -> None:
             print(f"Successfully loaded {len(loaded)} label definitions from {args.icd_file}")
         except Exception as e:
             print(f"Error loading ICD file: {e}")
+            raise SystemExit(1)
+
+    elif args.command == "generate-icd-code":
+        from arinc429.icd import generate_icd_code
+        try:
+            code = generate_icd_code(args.icd_file)
+            args.output.write_text(code, encoding="utf-8")
+            print(f"Successfully generated typed ICD code → {args.output}")
+        except Exception as e:
+            print(f"Error generating code from ICD: {e}")
             raise SystemExit(1)
 
     elif args.command == "simulate":
