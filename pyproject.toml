@@ -3,7 +3,7 @@ requires = ["setuptools>=69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PyARINC429"
+name = "pyarinc429"
 version = "1.0.0"
 description = "A lightweight Python library for encoding and decoding ARINC 429 data words."
 readme = "README.md"
