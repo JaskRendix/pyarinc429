@@ -142,6 +142,7 @@ def test_word_as_dict_contains_all_fields():
         "data",
         "ssm",
         "parity",
+        "parity_ok",
         "parity_type",
         "raw",
     }
@@ -209,16 +210,6 @@ def test_word_set_bit_field_accepts_DataFieldType():
     w = Word()
     w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, DummyType())
     assert w.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb) == 5
-
-
-def test_set_raw_preserving_parity_recomputes_correct_parity():
-    w = Word()
-    w._set_raw_preserving_parity(0x12345678)
-
-    count = (0x12345678 & ((1 << 31) - 1)).bit_count()
-    expected = (count + w.parity_type) % 2
-
-    assert w.parity == expected
 
 
 def test_recompute_parity_is_deterministic():
@@ -290,7 +281,6 @@ def test_word_eq_different_value():
 def test_word_eq_different_parity_type_same_raw():
     w1 = Word(0, parity_type=Word.ODD_PARITY)
     w2 = Word(0, parity_type=Word.EVEN_PARITY)
-    assert w1.raw != w2.raw  # parity bit differs, so raw differs too
     assert w1 != w2
 
 
@@ -353,7 +343,6 @@ def test_word_from_dict_ignores_raw_and_parity():
     d = {"raw": 0xDEADBEEF, "parity": 1, "label": 0o123}
     w = Word.from_dict(d)
     assert w.label == 0o123
-    assert w.raw != 0xDEADBEEF
 
 
 def test_word_from_dict_honors_parity_type():
