@@ -1,9 +1,9 @@
 # pyarinc429
 
 pyarinc429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
-It provides Python types and utilities for encoding and decoding ARINC 429 words, ARINC 615 framing, Williamsburg block‑transfer, ICD metadata loading, and a full ARINC 429 **simulation engine**.
+It provides Python types and utilities for encoding/decoding ARINC 429 words, ARINC 615 framing, Williamsburg block‑transfer, ICD metadata loading, and a full ARINC 429 **simulation engine**.
 
-**Original repository:** [https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
+**Original repository:** https://github.com/aeroneous/PyARINC429
 
 ---
 
@@ -26,7 +26,7 @@ pytest
 
 ## Package layout
 
-```
+```text
 arinc429/
     word.py
     bitfields.py
@@ -50,6 +50,7 @@ examples/
     multi_fault_sim.py
     high_rate_stress_test.py
     datatypes_integration.py
+    record_and_replay.py
 ```
 
 ---
@@ -58,7 +59,7 @@ examples/
 
 Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and parity handling.
 
-### Properties
+**Properties:**
 
 - label  
 - sdi  
@@ -67,9 +68,9 @@ Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and pari
 - parity  
 - parity_type  
 - parity_ok  
-- raw
+- raw  
 
-### Methods
+**Methods:**
 
 - get_bit_field(lsb, msb)  
 - set_bit_field(lsb, msb, value)  
@@ -79,7 +80,7 @@ Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and pari
 - with_fields(label=…, sdi=…, data=…, ssm=…)  
 - as_dict()  
 - to_json(indent=None)  
-- validate(raise_on_error=False)
+- validate(raise_on_error=False)  
 
 Bit‑field operations enforce range checks and recompute parity.
 
@@ -91,6 +92,7 @@ Fluent builder for constructing valid ARINC 429 words.
 
 ```python
 from arinc429.builder import WordBuilder
+from arinc429.word import Word
 
 w = (
     WordBuilder()
@@ -116,18 +118,14 @@ Typed helpers for decoding ARINC 429 numeric formats:
 
 Each type supports:
 
-- `.decoded`  
-- `.encoded`  
+- `.decoded` / `.encoded`  
 - `.resolution`  
 - `__int__`, `__float__`  
-- `.as_dict()`  
-- `.to_json()`  
+- `.as_dict()` / `.to_json()`  
 
 ---
 
 ## Label metadata
-
-Metadata for ARINC labels:
 
 ```python
 LabelInfo(label, name, system, category, direction=None, description=None)
@@ -140,8 +138,6 @@ require_label_info()
 
 ## Definitions
 
-Decoding schemas for known labels:
-
 ```python
 FieldDefinition(name, lsb, msb, type, resolution=None, unit=None)
 LabelDefinition(name, fields, info=None)
@@ -149,9 +145,9 @@ LabelDefinition(name, fields, info=None)
 
 Equipment sets:
 
-- EQUIP_ADC  
-- EQUIP_IRS  
-- EQUIP_ALL
+- `EQUIP_ADC`  
+- `EQUIP_IRS`  
+- `EQUIP_ALL`  
 
 ---
 
@@ -159,14 +155,14 @@ Equipment sets:
 
 ```python
 from arinc429.api import combine_definitions
+from arinc429.definitions import EQUIP_ADC, EQUIP_IRS
+
 custom = combine_definitions(EQUIP_ADC, EQUIP_IRS)
 ```
 
 ---
 
 ## ARINC 615 packetizer
-
-Framing model for ARINC 615 byte streams.
 
 ```python
 from arinc429.loader import Arinc615Packetizer
@@ -186,43 +182,63 @@ Implements the ARINC 429 Williamsburg block‑transfer state machine with CRC‑
 
 ## ICD loader
 
-Load external ICD metadata from JSON:
-
 ```python
 from arinc429.icd import load_icd_json
-load_icd_json("icd.json")
+labels = load_icd_json("icd.json")
 ```
 
 ---
 
 # Simulation Engine (`arinc429.sim`)
 
-Provides a full ARINC 429 virtual databus:
+Provides a full ARINC 429 virtual databus.
 
-### Components
+### Core components
 
 - **ArincBus** — thread‑safe shared bus with timestamped logging  
-- **VirtualNode** — transmitter/receiver LRU with periodic scheduling  
+- **VirtualNode** — periodic transmitter/receiver node  
 - **BusMonitor** — passive sniffer with parity tracking and label filtering  
-- **FaultyVirtualNode** — injects drops, bit flips, parity corruption  
-- **stop_all()** — clean shutdown helper  
+- **FaultConfig** — configuration for fault injection (drops, bit flips, parity)  
+- **FaultyVirtualNode** — node that applies configured faults  
+- **BusRecorder** — exports captured traffic to JSONL  
+- **ReplayNode** — replays recorded JSONL traffic with original timing and speed scaling  
+- **stop_all()** — clean shutdown helper for multiple nodes  
 
 ### Example usage
 
 ```python
-from arinc429.sim import ArincBus, VirtualNode, BusMonitor
+from arinc429.sim import ArincBus, VirtualNode, BusMonitor, BusRecorder, ReplayNode, stop_all
+from arinc429.builder import WordBuilder
+import time
+from pathlib import Path
 
 bus = ArincBus()
 monitor = BusMonitor("MON", bus)
 
 adc = VirtualNode("ADC", bus)
-adc.register_periodic_transmission(lambda: WordBuilder().label(0o203).data(0x1234).build(), rate_hz=20)
+adc.register_periodic_transmission(
+    lambda: WordBuilder().label(0o203).data(0x1234).build(),
+    rate_hz=20.0,
+)
 adc.start()
+
+time.sleep(1.0)
+stop_all([adc])
+
+# Record to JSONL
+log_file = Path("record.jsonl")
+BusRecorder.export_to_jsonl(monitor.captured_words, log_file)
+
+# Replay onto a fresh bus
+replay_bus = ArincBus()
+replay_monitor = BusMonitor("REPLAY_MON", replay_bus)
+player = ReplayNode(log_file, replay_bus, speed_multiplier=2.0)
+player.play()
 ```
 
 ---
 
-# CLI
+# CLI (`pyarinc`)
 
 The project provides a command‑line interface under the executable name `pyarinc`.
 
@@ -233,7 +249,7 @@ The project provides a command‑line interface under the executable name `pyari
 ```bash
 pyarinc decode 0x9c000c26
 pyarinc decode 0x9c000c26 --json
-pyarinc decode 0x9c000c26 --profile adc
+pyarinc decode 0x9c000c26 --profile adc --parity even
 ```
 
 ---
@@ -265,16 +281,14 @@ pyarinc load-icd icd.json
 
 ---
 
-# Bus Simulation (CLI)
-
-The simulation engine is accessible directly from the CLI:
+## Bus simulation (CLI)
 
 ```bash
 pyarinc simulate --duration 2.0
 pyarinc simulate --duration 2.0 --faulty
 ```
 
-This spins up:
+Spins up:
 
 - ADC node  
 - IRS node  
@@ -286,9 +300,25 @@ This spins up:
 
 ---
 
+## Replay recorded traffic (CLI)
+
+```bash
+pyarinc replay flight_recording.jsonl --speed 1.0
+pyarinc replay flight_recording.jsonl --speed 2.0
+```
+
+This:
+
+- loads a JSONL recording created by `BusRecorder` or the examples  
+- replays words onto a virtual bus at the requested speed multiplier  
+- logs replayed traffic via `BusMonitor`  
+- prints a replay summary and total words captured  
+
+---
+
 # Examples
 
-Four complete examples are included under `examples/`.
+Five complete examples are included under `examples/`.
 
 ---
 
@@ -302,8 +332,6 @@ Simulates:
 - BusMonitor auditing  
 - Faulty ADC injected mid‑flight  
 
-Demonstrates realistic avionics data flow.
-
 ---
 
 ## 2. Multi‑Fault Scenario (`multi_fault_sim.py`)
@@ -315,9 +343,6 @@ Simulates compound failures:
 - wrong labels  
 - packet drops  
 - silent node  
-- anomaly detection in Flight Director  
-
-Demonstrates robustness under chaotic conditions.
 
 ---
 
@@ -329,21 +354,23 @@ Simulates extreme bus load:
 - faulty node at 150 Hz  
 - saturation behavior  
 - throughput measurement  
-- parity error accumulation  
-
-Demonstrates scheduler and bus performance under stress.
 
 ---
 
 ## 4. Datatypes Integration (`datatypes_integration.py`)
 
-Demonstrates decoding raw ARINC 429 data into engineering units using the `BNR`, `BCD`, and `Discrete` datatypes.
+Demonstrates decoding raw ARINC 429 data into engineering units using `BNR`, `BCD`, and `Discrete` datatypes.
 
-Simulates:
+---
 
-- ADC transmitting BNR‑encoded altitude  
-- RTU transmitting BCD‑encoded frequency  
-- EngineeringFlightDeck decoding both into floats  
-- JSON serialization of decoded values  
+## 5. Record & Replay Demo (`record_and_replay.py`)
 
-Shows how the datatypes module integrates with the simulation engine.
+Demonstrates:
+
+- recording live bus traffic via `BusRecorder`  
+- exporting to JSONL  
+- replaying the recorded traffic via `ReplayNode` at 2× speed  
+- auditing replayed traffic with `BusMonitor`  
+- cleaning up the temporary log file  
+
+Shows how the simulation engine, recorder, and replay components fit together end‑to‑end.
