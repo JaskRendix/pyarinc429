@@ -51,8 +51,13 @@ def main():
         p_type = Word.EVEN_PARITY if args.parity == "even" else Word.ODD_PARITY
         defs = EQUIP_MAP.get(args.profile, EQUIP_ALL)
 
-        (decoded, definition, info), errors = decode_and_validate(val, definitions=defs, parity_type=p_type, report_unknown=True)
+        res, errors = decode_and_validate(val, definitions=defs, parity_type=p_type, report_unknown=True)
         word_obj = Word.from_int(val, p_type)
+
+        decoded = {}
+        definition = None
+        if res is not None:
+            decoded, definition, _ = res
 
         if args.json:
             output_data = {
