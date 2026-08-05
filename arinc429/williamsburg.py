@@ -165,33 +165,37 @@ class WilliamsburgSession:
             elif self.state == WilliamsburgState.SENT_RTS and control_code == WilliamsburgControlCode.SOF:
                 self.state = WilliamsburgState.RECEIVING
                 return None
-        elif self.state == WilliamsburgState.RECEIVING and control_code == WilliamsburgControlCode.EOF:
-            received_crc = param
 
-            # Underflow only
-            if len(self.rx_buffer) < self.expected_length:
-                self.state = WilliamsburgState.ERROR
-                return [
-                    self._build_control_word(
-                        WilliamsburgControlCode.NAK,
-                        NakReason.BUFFER_OVERFLOW,
-                    )
-                ]
+            elif self.state == WilliamsburgState.RECEIVING and control_code == WilliamsburgControlCode.EOF:
+                # EOF received: Verify payload length and CRC-16
+                received_crc = param
 
-            actual_payload = bytes(self.rx_buffer[: self.expected_length])
+                # 1. Length Check (Underflow or Overflow)
+                if len(self.rx_buffer) != self.expected_length:
+                    self.state = WilliamsburgState.ERROR
+                    return [
+                        self._build_control_word(
+                            WilliamsburgControlCode.NAK,
+                            NakReason.BUFFER_OVERFLOW,
+                        )
+                    ]
 
-            computed_crc = crc16_ccitt(actual_payload)
-            if computed_crc != received_crc:
-                self.state = WilliamsburgState.ERROR
-                return [
-                    self._build_control_word(
-                        WilliamsburgControlCode.NAK,
-                        NakReason.CHECKSUM_MISMATCH,
-                    )
-                ]
+                actual_payload = bytes(self.rx_buffer[: self.expected_length])
 
-            self.state = WilliamsburgState.IDLE
-            return [self._build_control_word(WilliamsburgControlCode.ACK, 0)]
+                # 2. CRC-16 Integrity Check
+                computed_crc = crc16_ccitt(actual_payload)
+                if computed_crc != received_crc:
+                    self.state = WilliamsburgState.ERROR
+                    return [
+                        self._build_control_word(
+                            WilliamsburgControlCode.NAK,
+                            NakReason.CHECKSUM_MISMATCH,
+                        )
+                    ]
+
+                # Validation Passed -> Acknowledge transfer and return to IDLE
+                self.state = WilliamsburgState.IDLE
+                return [self._build_control_word(WilliamsburgControlCode.ACK, 0)]
         else:
             if self.state == WilliamsburgState.WAIT_RTS and control_code == WilliamsburgControlCode.RTS:
                 self.state = WilliamsburgState.SENDING_BLOCK
