@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from arinc429.sim import ArincBus, VirtualNode, BusMonitor, stop_all, ReplayNode, BusRecorder
+from arinc429.sim import ArincBus, VirtualNode, BusMonitor, stop_all
+from arinc429.recorder import ReplayNode, BusRecorder
 from arinc429.builder import WordBuilder
 
 
