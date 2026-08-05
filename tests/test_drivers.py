@@ -48,8 +48,9 @@ class FakeTransport:
         self.outgoing.append(payload)
 
 
-class TestDriver(BaseArincDriver):
-    pass
+class DummyDriver(BaseArincDriver):
+    def __init__(self, bus, transport, parser=None):
+        super().__init__(bus, transport, parser)
 
 
 def test_parser_single_word():
@@ -84,7 +85,7 @@ def test_parser_ignores_invalid_chunks():
 
 
 class FakeSerial:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.is_open = True
         self.in_waiting = 4
         self.buffer = b"ABCD"
@@ -103,18 +104,13 @@ class FakeSerial:
 @pytest.fixture
 def fake_serial(monkeypatch):
     fake = FakeSerial()
-
-    def fake_serial_ctor(*args, **kwargs):
-        return fake
-
-    monkeypatch.setattr("arinc429.drivers.serial.Serial", fake_serial_ctor)
+    monkeypatch.setattr("arinc429.drivers.serial", type("obj", (), {"Serial": FakeSerial})())
     return fake
 
 
 def test_serial_open_close(fake_serial):
     t = SerialTransport("COM1")
     t.open()
-    assert t.conn is fake_serial
     assert t.conn.is_open
     t.close()
     assert t.conn.is_open is False
@@ -131,17 +127,19 @@ def test_serial_write(fake_serial):
     t = SerialTransport("COM1")
     t.open()
     t.write(b"XYZ")
-    assert fake_serial.written == [b"XYZ"]
+    assert t.conn.written == [b"XYZ"]
 
 
 @pytest.mark.parametrize("udp", [True, False])
-def test_socket_open_close(udp):
+def test_socket_open_close(udp, monkeypatch):
     if udp:
         transport = SocketTransport("127.0.0.1", 0, remote_host="127.0.0.1", remote_port=9999, udp=True)
+        transport.open()
     else:
         transport = SocketTransport("127.0.0.1", 0, remote_host="127.0.0.1", remote_port=9999, udp=False)
+        monkeypatch.setattr(socket.socket, "connect", lambda self, addr: None)
+        transport.open()
 
-    transport.open()
     assert transport.sock is not None
     assert transport.sock.gettimeout() == 0.1
     transport.close()
@@ -164,7 +162,7 @@ def test_udp_read_timeout():
 def test_driver_lifecycle():
     bus = FakeBus()
     transport = FakeTransport()
-    driver = TestDriver(bus, transport)
+    driver = DummyDriver(bus, transport)
 
     driver.connect()
     assert transport.opened is True
@@ -181,7 +179,7 @@ def test_driver_rx_loop_publishes_words():
         (1).to_bytes(4, "big"),
         b"",
     ])
-    driver = TestDriver(bus, transport)
+    driver = DummyDriver(bus, transport)
 
     driver.connect()
     time.sleep(0.05)
@@ -202,7 +200,7 @@ def test_driver_error_propagation():
 
     bus = FakeBus()
     transport = BadTransport()
-    driver = TestDriver(bus, transport)
+    driver = DummyDriver(bus, transport)
 
     driver.connect()
     time.sleep(0.05)
