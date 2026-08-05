@@ -1,7 +1,7 @@
 # pyarinc429
 
 pyarinc429 is a maintained fork of the original ARINC 429 library by Jason Hodge.  
-It provides Python types and utilities for encoding and decoding ARINC 429 words, ARINC 615 framing, and a complete Williamsburg block‑transfer engine.
+It provides Python types and utilities for encoding and decoding ARINC 429 words, ARINC 615 framing, Williamsburg block‑transfer, ICD metadata loading, and a full ARINC 429 **simulation engine**.
 
 **Original repository:** [https://github.com/aeroneous/PyARINC429](https://github.com/aeroneous/PyARINC429)
 
@@ -15,7 +15,7 @@ cd pyarinc429
 pip install .
 ```
 
-Tests:
+Run tests:
 
 ```bash
 pip install .[test]
@@ -43,14 +43,19 @@ arinc429/
     loader.py
     williamsburg.py
     icd.py
+    sim.py
     cli.py
+examples/
+    flight_sim.py
+    multi_fault_sim.py
+    high_rate_stress_test.py
 ```
 
 ---
 
 ## Word
 
-Represents a 32‑bit ARINC 429 word.
+Represents a 32‑bit ARINC 429 word with full bit‑field manipulation and parity handling.
 
 ### Properties
 
@@ -81,7 +86,7 @@ Bit‑field operations enforce range checks and recompute parity.
 
 ## WordBuilder
 
-Fluent builder for constructing words.
+Fluent builder for constructing valid ARINC 429 words.
 
 ```python
 from arinc429.builder import WordBuilder
@@ -98,46 +103,19 @@ w = (
 )
 ```
 
-Unknown attributes raise `ValueError`.  
-Overflow raises `FieldOverflowError`.  
-`strict_parity(True)` enforces parity correctness.
-
 ---
 
 ## Data types
 
-### BCD
+### BCD / BNR / Discrete
 
-```python
-BCD(value, resolution)
-```
-
-Attributes: decoded, encoded, resolution, sign  
-Methods: decode, copy, with_resolution, as_dict, to_json
-
-### BNR
-
-```python
-BNR(value, resolution)
-```
-
-Attributes: decoded, encoded, resolution  
-Methods: decode, copy, with_resolution, as_dict, to_json
-
-### Discrete
-
-```python
-Discrete(value)
-```
-
-Attributes: decoded, encoded  
-Methods: decode, copy, as_dict, to_json
+Typed decoding helpers for ARINC 429 numeric formats.
 
 ---
 
 ## Label metadata
 
-`labelinfo.py` defines metadata for ARINC labels:
+Metadata for ARINC labels:
 
 ```python
 LabelInfo(label, name, system, category, direction=None, description=None)
@@ -146,13 +124,11 @@ get_label_info()
 require_label_info()
 ```
 
-Metadata attaches to `LabelDefinition` through `attach_info()`.
-
 ---
 
 ## Definitions
 
-Defines decoding schemas for known labels.
+Decoding schemas for known labels:
 
 ```python
 FieldDefinition(name, lsb, msb, type, resolution=None, unit=None)
@@ -165,37 +141,20 @@ Equipment sets:
 - EQUIP_IRS  
 - EQUIP_ALL
 
-Helpers:
-
-```python
-decode_word(word, definitions)
-merge_definitions(*equip_sets)
-```
-
 ---
 
 ## High‑level API
 
 ```python
 from arinc429.api import combine_definitions
-from arinc429.definitions import EQUIP_ADC, EQUIP_IRS
-
 custom = combine_definitions(EQUIP_ADC, EQUIP_IRS)
 ```
 
 ---
 
-## ARINC615 packetizer
+## ARINC 615 packetizer
 
-A framing model for ARINC 615 byte streams.
-
-- SOF carries payload length  
-- DATA words carry 2 bytes  
-- Final block is padded  
-- EOF carries zero  
-- `decode()` reconstructs the payload using the SOF length
-
-Example:
+Framing model for ARINC 615 byte streams.
 
 ```python
 from arinc429.loader import Arinc615Packetizer
@@ -203,153 +162,161 @@ from arinc429.loader import Arinc615Packetizer
 p = Arinc615Packetizer(b"HELLO")
 words = p.to_words()
 decoded = Arinc615Packetizer.decode(words)
-assert decoded == b"HELLO"
 ```
 
 ---
 
 ## Williamsburg protocol engine
 
-`williamsburg.py` implements the ARINC 429 Williamsburg block‑transfer state machine.
-
-Features:
-
-- SAL / RTS / CTS / SOF / DATA / EOF / ACK / NAK control words  
-- 3‑bit control‑code packing into the 19‑bit data field  
-- CRC‑16‑CCITT integrity check  
-- Automatic 2‑byte ARINC padding  
-- Underflow detection  
-- CRC mismatch detection  
-- Round‑trip reconstruction of arbitrary payloads
-
-### Transmitter
-
-```python
-tx = WilliamsburgSession(is_transmitter=True)
-sal = tx.initiate_transfer(b"HELLO")
-transfer = tx.process_incoming_word(rts_word)
-```
-
-### Receiver
-
-```python
-rx = WilliamsburgSession(is_transmitter=False)
-
-ack = None
-for w in transfer:
-    r = rx.process_incoming_word(w)
-    if r is not None:
-        ack = r
-
-assert rx.get_received_data() == b"HELLO"
-```
-
-The receiver trims padding using the SAL length and validates CRC before acknowledging.
-
----
-
-## Validation
-
-```python
-w = Word()
-errors = w.validate(raise_on_error=False)
-if errors:
-    print(errors)
-```
+Implements the ARINC 429 Williamsburg block‑transfer state machine with CRC‑16‑CCITT, padding, and control‑word sequencing.
 
 ---
 
 ## ICD loader
 
-The ICD loader imports external label metadata from JSON files and registers them into the global `LABEL_INFO` registry.
-
-Example ICD file:
-
-```json
-{
-  "labels": [
-    {
-      "label": "0o203",
-      "name": "Pressure Altitude",
-      "system": "ADC",
-      "category": "Air Data",
-      "direction": "Source",
-      "description": "Custom description"
-    }
-  ]
-}
-```
-
-Load ICD metadata:
+Load external ICD metadata from JSON:
 
 ```python
 from arinc429.icd import load_icd_json
-
-info = load_icd_json("icd.json")
+load_icd_json("icd.json")
 ```
-
-This allows external ICDs to define custom label metadata without modifying Python source files.
 
 ---
 
-## CLI
+# **Simulation Engine (`arinc429.sim`)**
+
+The simulation module provides a full ARINC 429 virtual databus:
+
+### Components
+
+- **ArincBus** — thread‑safe shared bus with timestamped logging  
+- **VirtualNode** — transmitter/receiver LRU with periodic scheduling  
+- **BusMonitor** — passive sniffer with parity tracking and label filtering  
+- **FaultyVirtualNode** — injects faults (drops, bit flips, parity corruption)  
+- **stop_all()** — clean shutdown helper  
+
+### Example usage
+
+```python
+from arinc429.sim import ArincBus, VirtualNode, BusMonitor
+
+bus = ArincBus()
+monitor = BusMonitor("MON", bus)
+
+adc = VirtualNode("ADC", bus)
+adc.register_periodic_transmission(lambda: WordBuilder().label(0o203).data(0x1234).build(), rate_hz=20)
+adc.start()
+```
+
+---
+
+# **CLI**
 
 The project provides a command‑line interface under the executable name `pyarinc`.
 
-### Decode a raw ARINC 429 word
+---
+
+## Decode a raw ARINC 429 word
 
 ```bash
 pyarinc decode 0x9c000c26
-```
-
-JSON output:
-
-```bash
 pyarinc decode 0x9c000c26 --json
-```
-
-Select equipment profile:
-
-```bash
 pyarinc decode 0x9c000c26 --profile adc
 ```
 
-### ARINC 615 packetization
+---
 
-Encode a string:
+## ARINC 615 packetization
 
 ```bash
 pyarinc arinc615-encode "HELLO"
-```
-
-Encode a file:
-
-```bash
 pyarinc arinc615-encode --file payload.bin
-```
-
-Write output to JSON:
-
-```bash
 pyarinc arinc615-encode "HELLO" --output words.json
 ```
 
-### Williamsburg block‑transfer simulation
+---
+
+## Williamsburg block‑transfer simulation
 
 ```bash
 pyarinc williamsburg-simulate "HELLO"
-```
-
-Trace control‑word sequence:
-
-```bash
 pyarinc williamsburg-simulate "HELLO" --trace
 ```
 
-### Load ICD metadata
+---
+
+## Load ICD metadata
 
 ```bash
 pyarinc load-icd icd.json
 ```
 
-Loads external label metadata into the runtime registry.
+---
+
+# **Bus Simulation (CLI)**
+
+The simulation engine is accessible directly from the CLI:
+
+```bash
+pyarinc simulate --duration 2.0
+pyarinc simulate --duration 2.0 --faulty
+```
+
+This spins up:
+
+- ADC node  
+- IRS node  
+- optional faulty node  
+- BusMonitor  
+- periodic transmissions  
+- parity/error tracking  
+- summary report  
+
+---
+
+# **Examples**
+
+Three complete examples are included under `examples/`.
+
+---
+
+## **1. Flight Simulation (`flight_sim.py`)**
+
+Simulates:
+
+- ADC altitude  
+- IRS heading  
+- FMC receiving both  
+- BusMonitor auditing  
+- Faulty ADC injected mid‑flight  
+
+Demonstrates realistic avionics data flow.
+
+---
+
+## **2. Multi‑Fault Scenario (`multi_fault_sim.py`)**
+
+Simulates compound failures:
+
+- parity corruption  
+- bit flips  
+- wrong labels  
+- packet drops  
+- silent node  
+- anomaly detection in Flight Director  
+
+Demonstrates robustness under chaotic conditions.
+
+---
+
+## **3. High‑Rate Stress Test (`high_rate_stress_test.py`)**
+
+Simulates extreme bus load:
+
+- nodes transmitting at 100–500 Hz  
+- faulty node at 150 Hz  
+- saturation behavior  
+- throughput measurement  
+- parity error accumulation  
+
+Demonstrates scheduler and bus performance under stress.
