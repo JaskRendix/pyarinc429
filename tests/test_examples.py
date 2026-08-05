@@ -82,6 +82,5 @@ def test_record_and_replay_output_contains_expected_markers():
     result = run_example("record_and_replay.py")
     out = result.stdout
 
-    # Keep markers minimal — this example is intentionally simple
     assert "Record & Replay Demo" in out
-    assert "Replay finished" in out
+    assert "Replay complete" in out
