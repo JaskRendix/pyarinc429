@@ -9,11 +9,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
-from .drivers import ArincFrameParser
 from .word import Word
 
 if TYPE_CHECKING:
-    pass
+    from .drivers import ArincFrameParser
 
 
 class BusListener(Protocol):
@@ -227,6 +226,8 @@ class AsyncBusTransportDriver(BusListener):
         source_id: str = "HW_DEVICE",
         error_callback: Callable[[Exception, str], None] | None = None
     ) -> None:
+        from .drivers import ArincFrameParser
+
         self.bus = bus
         self.transport = transport
         self.parser = ArincFrameParser()
