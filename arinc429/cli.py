@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
+import time
 from pathlib import Path
 
 from arinc429.api import combine_definitions, decode_and_validate
@@ -45,9 +47,9 @@ def main() -> None:
     icd_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
 
     # ICD Code Generation command
-    gen_parser = subparsers.add_parser("generate-icd-code", help="Generate typed Python dataclasses from an ICD JSON file.")
+    gen_parser = subparsers.add_parser("generate", help="Generate typed Python dataclasses from an ICD JSON file.")
     gen_parser.add_argument("icd_file", type=Path, help="Path to ICD JSON metadata file.")
-    gen_parser.add_argument("-o", "--output", type=Path, default=Path("generated_icd.py"), help="Output Python file path.")
+    gen_parser.add_argument("-o", "--output", type=Path, help="Output Python file path (defaults to stdout).")
 
     # Bus simulation command
     sim_bus_parser = subparsers.add_parser("simulate", help="Run a live multi-node ARINC 429 bus simulation.")
@@ -195,12 +197,15 @@ def main() -> None:
             print(f"Error loading ICD file: {e}")
             raise SystemExit(1)
 
-    elif args.command == "generate-icd-code":
+    elif args.command == "generate":
         from arinc429.icd import generate_icd_code
         try:
             code = generate_icd_code(args.icd_file)
-            args.output.write_text(code, encoding="utf-8")
-            print(f"Successfully generated typed ICD code → {args.output}")
+            if args.output:
+                args.output.write_text(code, encoding="utf-8")
+                print(f"Successfully generated typed ICD code → {args.output}")
+            else:
+                print(code)
         except Exception as e:
             print(f"Error generating code from ICD: {e}")
             raise SystemExit(1)
@@ -208,7 +213,6 @@ def main() -> None:
     elif args.command == "simulate":
         from arinc429.sim import ArincBus, VirtualNode, BusMonitor, FaultConfig, FaultyVirtualNode, stop_all
         from arinc429.builder import WordBuilder
-        import time
 
         print("Initializing ARINC 429 Bus Simulation...")
         bus = ArincBus()
@@ -254,8 +258,11 @@ def main() -> None:
 
     elif args.command == "replay":
         from arinc429.sim import ArincBus, BusMonitor
-        from arinc429.sim import ReplayNode
-        import time
+        from arinc429.recorder import ReplayNode
+
+        if args.speed <= 0:
+            print(f"Error: --speed must be positive, got {args.speed}")
+            raise SystemExit(1)
 
         print(f"Loading record file: {args.record_file}...")
         bus = ArincBus()
@@ -264,7 +271,6 @@ def main() -> None:
         player = ReplayNode(args.record_file, bus, speed_multiplier=args.speed)
 
         print("Starting playback...")
-        import threading
         t = threading.Thread(target=player.play, daemon=True)
         t.start()
 
