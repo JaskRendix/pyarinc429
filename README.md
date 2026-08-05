@@ -49,6 +49,7 @@ examples/
     flight_sim.py
     multi_fault_sim.py
     high_rate_stress_test.py
+    datatypes_integration.py
 ```
 
 ---
@@ -107,9 +108,20 @@ w = (
 
 ## Data types
 
-### BCD / BNR / Discrete
+Typed helpers for decoding ARINC 429 numeric formats:
 
-Typed decoding helpers for ARINC 429 numeric formats.
+- **BCD** — Binary Coded Decimal  
+- **BNR** — Binary Number Representation  
+- **Discrete** — 2‑bit status matrix  
+
+Each type supports:
+
+- `.decoded`  
+- `.encoded`  
+- `.resolution`  
+- `__int__`, `__float__`  
+- `.as_dict()`  
+- `.to_json()`  
 
 ---
 
@@ -183,16 +195,16 @@ load_icd_json("icd.json")
 
 ---
 
-# **Simulation Engine (`arinc429.sim`)**
+# Simulation Engine (`arinc429.sim`)
 
-The simulation module provides a full ARINC 429 virtual databus:
+Provides a full ARINC 429 virtual databus:
 
 ### Components
 
 - **ArincBus** — thread‑safe shared bus with timestamped logging  
 - **VirtualNode** — transmitter/receiver LRU with periodic scheduling  
 - **BusMonitor** — passive sniffer with parity tracking and label filtering  
-- **FaultyVirtualNode** — injects faults (drops, bit flips, parity corruption)  
+- **FaultyVirtualNode** — injects drops, bit flips, parity corruption  
 - **stop_all()** — clean shutdown helper  
 
 ### Example usage
@@ -210,7 +222,7 @@ adc.start()
 
 ---
 
-# **CLI**
+# CLI
 
 The project provides a command‑line interface under the executable name `pyarinc`.
 
@@ -253,7 +265,7 @@ pyarinc load-icd icd.json
 
 ---
 
-# **Bus Simulation (CLI)**
+# Bus Simulation (CLI)
 
 The simulation engine is accessible directly from the CLI:
 
@@ -274,13 +286,13 @@ This spins up:
 
 ---
 
-# **Examples**
+# Examples
 
-Three complete examples are included under `examples/`.
+Four complete examples are included under `examples/`.
 
 ---
 
-## **1. Flight Simulation (`flight_sim.py`)**
+## 1. Flight Simulation (`flight_sim.py`)
 
 Simulates:
 
@@ -294,7 +306,7 @@ Demonstrates realistic avionics data flow.
 
 ---
 
-## **2. Multi‑Fault Scenario (`multi_fault_sim.py`)**
+## 2. Multi‑Fault Scenario (`multi_fault_sim.py`)
 
 Simulates compound failures:
 
@@ -309,7 +321,7 @@ Demonstrates robustness under chaotic conditions.
 
 ---
 
-## **3. High‑Rate Stress Test (`high_rate_stress_test.py`)**
+## 3. High‑Rate Stress Test (`high_rate_stress_test.py`)
 
 Simulates extreme bus load:
 
@@ -320,3 +332,18 @@ Simulates extreme bus load:
 - parity error accumulation  
 
 Demonstrates scheduler and bus performance under stress.
+
+---
+
+## 4. Datatypes Integration (`datatypes_integration.py`)
+
+Demonstrates decoding raw ARINC 429 data into engineering units using the `BNR`, `BCD`, and `Discrete` datatypes.
+
+Simulates:
+
+- ADC transmitting BNR‑encoded altitude  
+- RTU transmitting BCD‑encoded frequency  
+- EngineeringFlightDeck decoding both into floats  
+- JSON serialization of decoded values  
+
+Shows how the datatypes module integrates with the simulation engine.
