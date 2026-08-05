@@ -49,6 +49,11 @@ def main() -> None:
     sim_bus_parser.add_argument("--duration", type=float, default=2.0, help="Simulation duration in seconds.")
     sim_bus_parser.add_argument("--faulty", action="store_true", help="Introduce a faulty node to test parity and error monitoring.")
 
+    # Replay simulation command
+    replay_parser = subparsers.add_parser("replay", help="Replay a recorded JSONL ARINC 429 traffic file.")
+    replay_parser.add_argument("record_file", type=Path, help="Path to recorded JSONL file.")
+    replay_parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier.")
+
     args = parser.parse_args()
 
     if args.command == "decode":
@@ -231,6 +236,32 @@ def main() -> None:
             words = monitor.get_traffic_by_label(label)
             if words:
                 print(f"  - Label {label:03o}: {len(words)} messages received")
+
+    elif args.command == "replay":
+        from arinc429.sim import ArincBus, BusMonitor
+        from arinc429.sim import ReplayNode
+        import time
+
+        print(f"Loading record file: {args.record_file}...")
+        bus = ArincBus()
+        monitor = BusMonitor("REPLAY_MONITOR", bus)
+        
+        player = ReplayNode(args.record_file, bus, speed_multiplier=args.speed)
+
+        print("Starting playback...")
+        import threading
+        t = threading.Thread(target=player.play, daemon=True)
+        t.start()
+
+        try:
+            while t.is_alive():
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            player.stop()
+
+        print("\n--- Replay Summary ---")
+        print(f"Total words replayed/captured: {len(monitor.captured_words)}")
+        print("Replay session completed.")
 
 
 if __name__ == "__main__":
