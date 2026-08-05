@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 import pytest
 
-
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 
 
@@ -22,6 +21,7 @@ def run_example(script: str):
     "multi_fault_sim.py",
     "high_rate_stress_test.py",
     "datatypes_integration.py",
+    "record_and_replay.py",
 ])
 def test_examples_run_without_crashing(script):
     result = run_example(script)
@@ -75,3 +75,13 @@ def test_datatypes_integration_output_contains_expected_markers():
     assert "Final Decoded Altitude" in out
     assert "Final Decoded Frequency" in out
     assert "Datatypes decoding test passed successfully" in out
+
+
+@pytest.mark.examples
+def test_record_and_replay_output_contains_expected_markers():
+    result = run_example("record_and_replay.py")
+    out = result.stdout
+
+    # Keep markers minimal — this example is intentionally simple
+    assert "Record & Replay Demo" in out
+    assert "Replay finished" in out
