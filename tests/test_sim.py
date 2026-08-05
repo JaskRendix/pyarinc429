@@ -13,6 +13,9 @@ from arinc429.sim import (
     BusRecorder,
     ReplayNode,
     VirtualNode,
+    FaultConfig,
+    FaultyVirtualNode,
+    stop_all,
 )
 from arinc429.word import Word
 
