@@ -197,12 +197,19 @@ def generate_icd_code(file_path: str | Path) -> str:
                 lines.append(f"        bits_{fname} = word.get_bit_field({lsb}, {msb})")
 
                 if ftype == "BNR":
+                    # Use BNR.decode so two's-complement sign extension is
+                    # applied for negative values (BNR(value) is an encoder).
+                    width = int(msb) - int(lsb) + 1
                     if resolution is None:
-                        lines.append(f"        {fname} = float(BNR(bits_{fname}).decoded)")
+                        lines.append(f"        {fname} = float(BNR.decode(bits_{fname}, {width}).decoded)")
                     else:
-                        lines.append(f"        {fname} = float(BNR(bits_{fname}, resolution={resolution}).decoded)")
+                        lines.append(f"        {fname} = float(BNR.decode(bits_{fname}, {width}, resolution={resolution}).decoded)")
                 elif ftype == "BCD":
-                    lines.append(f"        {fname} = int(BCD(bits_{fname}).decoded)")
+                    # SSM carries the sign/status for BCD data on ARINC 429.
+                    if resolution is None:
+                        lines.append(f"        {fname} = int(BCD.decode(bits_{fname}, ssm).decoded)")
+                    else:
+                        lines.append(f"        {fname} = int(BCD.decode(bits_{fname}, ssm, resolution={resolution}).decoded)")
                 elif ftype == "DISCRETE":
                     lines.append(f"        {fname} = int(Discrete(bits_{fname}).decoded)")
                 else:

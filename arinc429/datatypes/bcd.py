@@ -98,7 +98,21 @@ class BCD(DataFieldType):
     def decode(
         cls, bcd_value: int, bcd_sign: int, resolution: DataFieldValue = 1
     ) -> "BCD":
+        """Decode packed BCD nibbles into a signed engineering value.
+
+        The sign is taken from ``bcd_sign`` (use the word's SSM bits on
+        ARINC 429). Nibbles are processed least-significant first; a nibble
+        outside 0..9 (invalid BCD digit) is taken at face value so a corrupt
+        field degrades gracefully instead of raising mid-decode. Use
+        ``definitions.validate_field`` if you need strict digit validation.
+        """
         sign = -1 if bcd_sign == cls.MINUS else 1
-        int_value = int(format(bcd_value, "x"), 10)
+        int_value = 0
+        shift = 0
+        while bcd_value:
+            nibble = bcd_value & 0xF
+            int_value += nibble * (10**shift)
+            bcd_value >>= 4
+            shift += 1
         value = sign * Decimal(int_value) * Decimal(str(resolution))
         return cls(value, resolution)

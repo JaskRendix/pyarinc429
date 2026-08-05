@@ -179,3 +179,35 @@ def test_session_reset():
     assert session.state == WilliamsburgState.IDLE
     assert session.payload == b""
     assert len(session.rx_buffer) == 0
+
+
+def test_session_payload_at_16bit_limit_roundtrips():
+    """Payloads up to 0xFFFF bytes must transfer cleanly (length field is
+    16-bit); the old 19-bit limit silently truncated larger lengths."""
+    tx_session = WilliamsburgSession(is_transmitter=True)
+    rx_session = WilliamsburgSession(is_transmitter=False)
+
+    payload = bytes(range(256)) * 255  # 65280 bytes, fits in 16 bits
+    assert len(payload) <= 0xFFFF
+
+    sal = tx_session.initiate_transfer(payload)
+    rts = rx_session.process_incoming_word(sal[0])
+    assert rts is not None
+    transfer = tx_session.process_incoming_word(rts[0])
+    assert transfer is not None
+
+    ack = None
+    for w in transfer:
+        res = rx_session.process_incoming_word(w)
+        if res is not None:
+            ack = res
+    assert ack is not None
+    assert rx_session.get_received_data() == payload
+
+
+def test_session_payload_over_16bit_limit_raises():
+    """65536 bytes cannot fit in the 16-bit length/param field and must be
+    rejected up front instead of silently corrupting the transfer."""
+    tx_session = WilliamsburgSession(is_transmitter=True)
+    with pytest.raises(ValueError, match="16-bit"):
+        tx_session.initiate_transfer(b"\x00" * (0xFFFF + 1))

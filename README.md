@@ -30,6 +30,7 @@ pytest
 arinc429/
     word.py
     bitfields.py
+    decode.py
     errors.py
     builder.py
     definitions.py
@@ -278,6 +279,18 @@ pyarinc williamsburg-simulate "HELLO" --trace
 ```bash
 pyarinc load-icd icd.json
 ```
+
+## Generate Python module from an ICD
+
+```bash
+pyarinc generate icd.json
+pyarinc generate icd.json --output custom_icd.py
+```
+
+Emits a Python module with one typed dataclass per label (including a
+`from_word` decoder), an `ICD_REGISTRY` mapping label → dataclass, and a
+`decode_icd_word()` helper. BNR fields are sign-extended from their field
+width and BCD fields take their sign from the word SSM bits.
 
 ---
 

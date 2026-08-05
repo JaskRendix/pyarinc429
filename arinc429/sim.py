@@ -23,7 +23,9 @@ class BusListener(Protocol):
 class ArincBus:
     listeners: list[BusListener] = field(default_factory=list)
     word_log: list[tuple[float, str, Word]] = field(default_factory=list)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
+    # RLock so a listener that transmits back onto the bus (re-entrant
+    # callback) does not deadlock against the plain Lock held by transmit().
+    _lock: threading.RLock = field(default_factory=threading.RLock)
 
     def attach(self, listener: BusListener) -> None:
         with self._lock:
@@ -58,6 +60,8 @@ class VirtualNode:
         self._thread: threading.Thread | None = None
 
     def register_periodic_transmission(self, word_generator: Callable[[], Word], rate_hz: float) -> None:
+        if rate_hz <= 0:
+            raise ValueError(f"rate_hz must be positive, got {rate_hz}")
         interval = 1.0 / rate_hz
         self._schedules.append({
             "generator": word_generator,
@@ -120,6 +124,14 @@ class FaultConfig:
     corrupt_parity: bool = False
     bit_flip_probability: float = 0.0
 
+    def __post_init__(self) -> None:
+        for name, prob in (
+            ("drop_probability", self.drop_probability),
+            ("bit_flip_probability", self.bit_flip_probability),
+        ):
+            if not 0.0 <= prob <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1], got {prob}")
+
 
 class FaultyVirtualNode(VirtualNode):
 
@@ -179,6 +191,8 @@ class ReplayNode:
     """Replays a recorded JSONL ARINC 429 traffic file onto a virtual bus with original timing."""
 
     def __init__(self, filepath: Path | str, bus: ArincBus, speed_multiplier: float = 1.0) -> None:
+        if speed_multiplier <= 0:
+            raise ValueError(f"speed_multiplier must be positive, got {speed_multiplier}")
         self.filepath = Path(filepath)
         self.bus = bus
         self.speed_multiplier = speed_multiplier

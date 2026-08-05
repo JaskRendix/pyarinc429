@@ -6,8 +6,12 @@ from enum import Enum, IntEnum, auto
 from .bitfields import DATA_BITS
 from .word import Word
 
-# 19-bit max integer limit for ARINC 429 DATA field (bits 11..29)
-MAX_PAYLOAD_BYTES = (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1
+# Maximum payload length encodable in the 16-bit parameter field of a
+# Williamsburg control word. The 19-bit DATA field packs a 3-bit control
+# code plus a 16-bit length/CRC parameter (see _build_control_word), so a
+# transfer length can never exceed 0xFFFF even though the DATA field itself
+# could hold a larger integer.
+MAX_PAYLOAD_BYTES = 0xFFFF
 
 
 def crc16_ccitt(data: bytes, initial: int = 0xFFFF) -> int:
@@ -125,7 +129,8 @@ class WilliamsburgSession:
 
         if len(payload) > MAX_PAYLOAD_BYTES:
             raise ValueError(
-                f"Payload size ({len(payload)} bytes) exceeds maximum allowable 19-bit limit ({MAX_PAYLOAD_BYTES} bytes)"
+                f"Payload size ({len(payload)} bytes) exceeds the 16-bit "
+                f"length limit ({MAX_PAYLOAD_BYTES} bytes)"
             )
 
         self.payload = payload

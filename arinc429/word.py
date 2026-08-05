@@ -265,26 +265,16 @@ class Word:
         self, definition: LabelDefinition, report_unknown: bool = False
     ):
         """Decode this ARINC 429 word using a multi-field LabelDefinition."""
-        from .datatypes.bcd import BCD
-        from .datatypes.bnr import BNR
-        from .datatypes.discrete import Discrete
+        from .decode import decode_field
 
-        decoded_fields = {}
+        decoded_fields: dict[str, object] = {}
         unknown_fields: list[str] = []
 
         for field in definition.fields:
-            raw = self.get_bit_field(field.lsb, field.msb)
-
-            if field.type == "BNR":
-                decoded = BCD.decode(raw, field.width, field.resolution) if field.type == "BCD" else BNR.decode(raw, field.width, field.resolution)
-            elif field.type == "BCD":
-                decoded = BCD.decode(raw, self.ssm, field.resolution)
-            elif field.type == "DISCRETE":
-                decoded = Discrete.decode(raw)
-            else:
+            decoded = decode_field(self, field)
+            if decoded is None:
                 unknown_fields.append(field.name)
                 continue
-
             decoded_fields[field.name] = decoded
 
         if report_unknown:

@@ -5,9 +5,7 @@ from decimal import Decimal
 from typing import Literal
 
 from arinc429.bitfields import DATA_BITS
-from arinc429.datatypes.bcd import BCD
-from arinc429.datatypes.bnr import BNR
-from arinc429.datatypes.discrete import Discrete
+from arinc429.decode import decode_field
 from arinc429.labelinfo import LABEL_INFO, LabelInfo
 from arinc429.word import Word
 
@@ -100,15 +98,8 @@ def decode_word(
     unknown_fields: list[str] = []
 
     for field in definition.fields:
-        raw = word.get_bit_field(field.lsb, field.msb)
-
-        if field.type == "BNR":
-            decoded = BNR.decode(raw, field.width, field.resolution)
-        elif field.type == "BCD":
-            decoded = BCD.decode(raw, word.ssm, field.resolution)
-        elif field.type == "DISCRETE":
-            decoded = Discrete.decode(raw)
-        else:
+        decoded = decode_field(word, field)
+        if decoded is None:
             unknown_fields.append(field.name)
             continue
 

@@ -362,3 +362,53 @@ def test_record_and_replay_integration(tmp_path):
     assert replayed_word.to_int() == w.to_int()
     assert src.startswith("REPLAY:")
 
+
+
+def test_replaynode_rejects_nonpositive_speed(tmp_path):
+    w = make_word()
+    outfile = tmp_path / "log.jsonl"
+    BusRecorder.export_to_jsonl([(time.time(), w, "SRC")], outfile)
+
+    with pytest.raises(ValueError, match="speed_multiplier"):
+        ReplayNode(outfile, ArincBus(), speed_multiplier=0)
+    with pytest.raises(ValueError, match="speed_multiplier"):
+        ReplayNode(outfile, ArincBus(), speed_multiplier=-2.0)
+
+
+def test_virtualnode_rejects_nonpositive_rate():
+    bus = ArincBus()
+    node = VirtualNode("TX", bus)
+    with pytest.raises(ValueError, match="rate_hz"):
+        node.register_periodic_transmission(lambda: make_word(), rate_hz=0)
+    with pytest.raises(ValueError, match="rate_hz"):
+        node.register_periodic_transmission(lambda: make_word(), rate_hz=-5)
+
+
+def test_faultconfig_rejects_out_of_range_probabilities():
+    with pytest.raises(ValueError, match="drop_probability"):
+        FaultConfig(drop_probability=1.5)
+    with pytest.raises(ValueError, match="bit_flip_probability"):
+        FaultConfig(bit_flip_probability=-0.1)
+
+
+def test_bus_lock_is_reentrant():
+    """A listener that publishes back onto the bus must not deadlock."""
+    bus = ArincBus()
+    received = []
+
+    class AckingListener:
+        def __init__(self):
+            self._acked = False
+
+        def on_word_received(self, word, source_id):
+            received.append(source_id)
+            if not self._acked:
+                self._acked = True
+                bus.transmit(make_word(), "ACK")  # re-entrant transmit
+
+    bus.attach(AckingListener())
+    bus.transmit(make_word(), "SRC")
+
+    assert "SRC" in received
+    assert "ACK" in received
+    assert len(bus.word_log) == 2
