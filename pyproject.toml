@@ -26,6 +26,9 @@ test = [
     "pytest-cov",
 ]
 
+[project.scripts]
+pyarinc = "arinc429.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "."}
 
