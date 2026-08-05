@@ -16,15 +16,17 @@ class BCD(DataFieldType):
     def __init__(
         self, value: DataFieldValue = 0, resolution: DataFieldValue = 1
     ) -> None:
-        value = Decimal(str(value))
-        resolution = Decimal(str(resolution))
+        val_dec = Decimal(str(value))
+        res_dec = Decimal(str(resolution))
 
-        encoded_value = value // resolution
-        minus, digits, _ = encoded_value.as_tuple()
+        self._sign = self.MINUS if val_dec < 0 else self.PLUS
+        abs_val = abs(val_dec)
 
-        self._decoded_value = encoded_value * resolution
-        self._resolution = resolution
-        self._sign = self.MINUS if minus else self.PLUS
+        encoded_value = abs_val // res_dec
+        _, digits, _ = encoded_value.as_tuple()
+
+        self._decoded_value = val_dec
+        self._resolution = res_dec
 
         bcd_value = 0
         for digit in digits:
@@ -96,7 +98,21 @@ class BCD(DataFieldType):
     def decode(
         cls, bcd_value: int, bcd_sign: int, resolution: DataFieldValue = 1
     ) -> "BCD":
+        """Decode packed BCD nibbles into a signed engineering value.
+
+        The sign is taken from ``bcd_sign`` (use the word's SSM bits on
+        ARINC 429). Nibbles are processed least-significant first; a nibble
+        outside 0..9 (invalid BCD digit) is taken at face value so a corrupt
+        field degrades gracefully instead of raising mid-decode. Use
+        ``definitions.validate_field`` if you need strict digit validation.
+        """
         sign = -1 if bcd_sign == cls.MINUS else 1
-        int_value = int(format(bcd_value, "x"), 10)
+        int_value = 0
+        shift = 0
+        while bcd_value:
+            nibble = bcd_value & 0xF
+            int_value += nibble * (10**shift)
+            bcd_value >>= 4
+            shift += 1
         value = sign * Decimal(int_value) * Decimal(str(resolution))
         return cls(value, resolution)

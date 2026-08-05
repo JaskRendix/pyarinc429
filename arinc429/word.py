@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 from .bitfields import DATA_BITS, LABEL_BITS, LSB, MSB, PARITY_BIT, SDI_BITS, SSM_BITS
 from .datatypes.base import DataFieldType
+from .decoding import decode_field
 from .errors import FieldOverflowError
 from .labels import decode_label, encode_label
+
+if TYPE_CHECKING:
+    from .definitions import LabelDefinition
 
 
 class Word:
@@ -14,15 +19,39 @@ class Word:
     EVEN_PARITY = 0
     ODD_PARITY = 1
 
-    def __init__(self, value: int = 0, parity_type: int = ODD_PARITY) -> None:
-        self._value = 0
+    def __init__(
+        self, value: int = 0, parity_type: int = ODD_PARITY, strict_parity: bool = False
+    ) -> None:
+        if parity_type not in (self.EVEN_PARITY, self.ODD_PARITY):
+            raise ValueError(f"Invalid parity type: {parity_type}")
+        self._value = value & 0xFFFFFFFF
         self._parity_type = parity_type
-        self._set_raw_preserving_parity(value)
+        self._strict_parity = strict_parity
+
+        if self._strict_parity and not self.parity_ok:
+            raise ValueError("Parity check failed under strict parity enforcement")
 
     @classmethod
-    def from_int(cls, value: int, parity_type: int = ODD_PARITY) -> Word:
-        """Create a Word from a raw 32‑bit integer without corrupting parity."""
-        return cls(value, parity_type)
+    def from_int(
+        cls, value: int, parity_type: int = ODD_PARITY, strict_parity: bool = False
+    ) -> Word:
+        """Create a Word from a raw 32‑bit integer, preserving the stored parity bit."""
+        return cls(value, parity_type, strict_parity=strict_parity)
+
+    @classmethod
+    def from_hex(
+        cls, hex_str: str, parity_type: int = ODD_PARITY, strict_parity: bool = False
+    ) -> Word:
+        """Create a Word from a hex string (e.g. '0x12345678')."""
+        return cls(int(hex_str, 16), parity_type, strict_parity=strict_parity)
+
+    @classmethod
+    def from_bin(
+        cls, bin_str: str, parity_type: int = ODD_PARITY, strict_parity: bool = False
+    ) -> Word:
+        """Create a Word from a binary string (e.g. '1000...')."""
+        cleaned = bin_str.replace("_", "").replace(" ", "")
+        return cls(int(cleaned, 2), parity_type, strict_parity=strict_parity)
 
     def to_int(self) -> int:
         return self._value
@@ -32,7 +61,7 @@ class Word:
         return self._value
 
     def copy(self) -> Word:
-        return Word(self._value, self._parity_type)
+        return Word(self._value, self._parity_type, strict_parity=self._strict_parity)
 
     def with_fields(self, **kwargs: Any) -> Word:
         w = self.copy()
@@ -46,17 +75,28 @@ class Word:
     def __index__(self) -> int:
         return self._value
 
+    def __bool__(self) -> bool:
+        return self._value != 0
+
     def __format__(self, fmt: str) -> str:
         return self._value.__format__(fmt)
 
     def __repr__(self) -> str:
-        return f"Word({self._value:#x})"
+        return f"Word({self._value:#010x})"
 
     def __str__(self) -> str:
         return (
-            f"Label={self.label:#o}, SDI={self.sdi}, Data={self.data:#x}, "
-            f"SSM={self.ssm}, Parity={self.parity}"
+            f"Label={self.label:#05o}, SDI={self.sdi}, Data={self.data:#x}, "
+            f"SSM={self.ssm}, Parity={self.parity} (OK={self.parity_ok})"
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Word):
+            return NotImplemented
+        return self._value == other._value and self._parity_type == other._parity_type
+
+    def __hash__(self) -> int:
+        return hash((self._value, self._parity_type))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -65,50 +105,79 @@ class Word:
             "data": self.data,
             "ssm": self.ssm,
             "parity": self.parity,
+            "parity_ok": self.parity_ok,
             "parity_type": self.parity_type,
             "raw": self._value,
         }
 
+    def to_binary_str(self) -> str:
+        """Return the 32-bit word as an MSB-first '0'/'1' string, bit 32 first."""
+        return f"{self._value:032b}"
+
+    def to_json(self, indent: int | None = None) -> str:
+        """Serialize the Word dictionary representation to a JSON string."""
+        return json.dumps(self.as_dict(), indent=indent)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Word:
+        """Build a Word from a dictionary representation."""
+        parity_type = d.get("parity_type", cls.ODD_PARITY)
+
+        if "raw" in d:
+            return cls.from_int(d["raw"], parity_type=parity_type)
+
+        w = cls(0, parity_type=parity_type)
+        if "label" in d:
+            w.label = d["label"]
+        if "sdi" in d:
+            w.sdi = d["sdi"]
+        if "data" in d:
+            w.data = d["data"]
+        if "ssm" in d:
+            w.ssm = d["ssm"]
+        return w
+
     @property
     def label(self) -> int:
-        wire = self.get_bit_field(*LABEL_BITS)
+        wire = self.get_bit_field(LABEL_BITS.lsb, LABEL_BITS.msb)
         return decode_label(wire)
 
     @label.setter
     def label(self, value: int) -> None:
         encoded = encode_label(value)
-        self.set_bit_field(*LABEL_BITS, encoded)
+        self.set_bit_field(LABEL_BITS.lsb, LABEL_BITS.msb, encoded)
 
     @property
     def sdi(self) -> int:
-        return self.get_bit_field(*SDI_BITS)
+        return self.get_bit_field(SDI_BITS.lsb, SDI_BITS.msb)
 
     @sdi.setter
     def sdi(self, value: int) -> None:
-        self.set_bit_field(*SDI_BITS, value)
+        self.set_bit_field(SDI_BITS.lsb, SDI_BITS.msb, value)
 
     @property
     def data(self) -> int:
-        return self.get_bit_field(*DATA_BITS)
+        return self.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb)
 
     @data.setter
     def data(self, value: int) -> None:
-        self.set_bit_field(*DATA_BITS, value)
+        self.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, value)
 
     @property
     def ssm(self) -> int:
-        return self.get_bit_field(*SSM_BITS)
+        return self.get_bit_field(SSM_BITS.lsb, SSM_BITS.msb)
 
     @ssm.setter
     def ssm(self, value: int) -> None:
-        self.set_bit_field(*SSM_BITS, value)
+        self.set_bit_field(SSM_BITS.lsb, SSM_BITS.msb, value)
 
     @property
     def parity(self) -> int:
-        return self.get_bit_field(PARITY_BIT, PARITY_BIT)
+        return self.get_bit_field(PARITY_BIT.lsb, PARITY_BIT.msb)
 
     @property
     def parity_ok(self) -> bool:
+        """Check if stored bit 32 parity matches the computed parity of bits 1–31."""
         count = (self._value & ((1 << 31) - 1)).bit_count()
         expected = (count + self._parity_type) % 2
         return expected == self.parity
@@ -136,7 +205,7 @@ class Word:
             raise ValueError("Bit length must be > 0")
 
         max_value = (1 << bit_length) - 1
-        min_value = ~(max_value >> 1)  # e.g. 5 bits → -16..15
+        min_value = ~(max_value >> 1)
 
         if not (min_value <= value <= max_value):
             raise FieldOverflowError(value, bit_length)
@@ -144,31 +213,27 @@ class Word:
     def validate(self, raise_on_error: bool = True) -> list[str] | None:
         errors: list[str] = []
 
-        # Label
         try:
             _ = self.label
         except Exception as exc:
             errors.append(str(exc))
 
-        # SDI / SSM
         if not (0 <= self.sdi <= 3):
             errors.append(f"SDI out of range: {self.sdi}")
         if not (0 <= self.ssm <= 3):
             errors.append(f"SSM out of range: {self.ssm}")
 
-        # DATA
         data_val = self.data
         max_data = (1 << (DATA_BITS.msb - DATA_BITS.lsb + 1)) - 1
         if not (0 <= data_val <= max_data):
             errors.append(f"DATA out of range: {data_val}")
 
-        # Parity
         if not self.parity_ok:
             errors.append("Parity bit does not match computed parity")
 
         if raise_on_error:
             if errors:
-                raise ValueError(errors[0])
+                raise ValueError("; ".join(errors))
             return None
         return errors
 
@@ -196,65 +261,47 @@ class Word:
 
         self._recompute_parity()
 
-    def _set_raw_preserving_parity(self, value: int) -> None:
-        """Set raw 32‑bit value without corrupting the parity bit."""
-        self._value = value & 0xFFFFFFFF
-        self._recompute_parity()
-
     def _recompute_parity(self) -> None:
-        """Recompute parity without destroying other bits."""
-        parity_offset = PARITY_BIT - 1
-
-        # Count bits 1–31
+        """Recompute bit 32 parity from bits 1–31."""
+        parity_offset = PARITY_BIT.lsb - 1
         count = (self._value & ((1 << 31) - 1)).bit_count()
         parity_bit = (count + self._parity_type) % 2
 
-        # Clear parity bit
         self._value &= ~(1 << parity_offset)
-
-        # Set parity bit
         self._value |= parity_bit << parity_offset
 
-    def decode_with_definition(self, definition):
-        """
-        Decode this ARINC 429 word using a multi-field LabelDefinition.
-        Returns a dict of field_name → decoded_value.
-        """
+    def decode_with_definition(
+        self, definition: LabelDefinition, report_unknown: bool = False
+    ):
+        """Decode this ARINC 429 word using a multi-field LabelDefinition."""
 
-        from .datatypes.bcd import BCD
-        from .datatypes.bnr import BNR
-        from .datatypes.discrete import Discrete
-
-        decoded_fields = {}
+        decoded_fields: dict[str, object] = {}
+        unknown_fields: list[str] = []
 
         for field in definition.fields:
-            raw = self.get_bit_field(field.lsb, field.msb)
-
-            if field.type == "BNR":
-                decoded = BNR.decode(raw, field.width, field.resolution)
-            elif field.type == "BCD":
-                decoded = BCD.decode(raw, self.ssm, field.resolution)
-            elif field.type == "DISCRETE":
-                decoded = Discrete.decode(raw)
-            else:
+            decoded = decode_field(self, field)
+            if decoded is None:
+                unknown_fields.append(field.name)
                 continue
-
             decoded_fields[field.name] = decoded
 
+        if report_unknown:
+            return decoded_fields, unknown_fields
         return decoded_fields
 
-    def decode_by_label(self, definitions: dict[int, Any]):
+    def decode_by_label(self, definitions: dict[int, LabelDefinition]):
+        label = self.label
         try:
-            definition = definitions[self.label]
+            definition = definitions[label]
         except KeyError:
-            raise KeyError(f"Label {self.label:#o} not present in definitions")
+            raise KeyError(f"Label {label:#o} not present in definitions")
 
         return self.decode_with_definition(definition)
 
-    def validate_against(self, definition) -> list[str]:
+    def validate_against(self, definition: LabelDefinition) -> list[str]:
         return definition.validate_word(self)
 
-    def validate_by_label(self, definitions) -> list[str]:
+    def validate_by_label(self, definitions: dict[int, LabelDefinition]) -> list[str]:
         try:
             definition = definitions[self.label]
         except KeyError:

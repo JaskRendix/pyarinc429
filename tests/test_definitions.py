@@ -3,7 +3,9 @@ from decimal import Decimal
 
 import pytest
 
+from arinc429.datatypes.bnr import BNR
 from arinc429.definitions import EQUIP_ADC, EQUIP_IRS, FieldDefinition, LabelDefinition
+from arinc429.word import Word
 
 
 def test_labeldefinition_basic_fields():
@@ -101,3 +103,18 @@ def test_equip_dicts_are_mutable_but_values_are_not():
 
     with pytest.raises(Exception):
         EQUIP_ADC[0o203].name = "Changed"
+
+
+def test_labeldefinition_instance_decode_method():
+    w = Word()
+    w.label = 0o203
+    w.data = BNR(250, Decimal("1.0"))
+
+    ld = EQUIP_ADC[0o203]
+    result = ld.decode(w)
+    assert result is not None
+
+    decoded_fields, definition, info = result
+    assert definition.name == "Pressure Altitude"
+    assert "altitude" in decoded_fields
+    assert float(decoded_fields["altitude"]) == 250.0

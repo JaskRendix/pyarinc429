@@ -9,6 +9,20 @@ class Discrete(DataFieldType):
     FUNCTIONAL_TEST = 2
     FAILURE_WARNING = 3
 
+    _NAME_TO_VAL = {
+        "NORMAL_OPERATION": 0,
+        "VERIFIED_DATA": 0,
+        "NO_COMPUTED_DATA": 1,
+        "FUNCTIONAL_TEST": 2,
+        "FAILURE_WARNING": 3,
+    }
+    _VAL_TO_NAME = {
+        0: "NORMAL_OPERATION",
+        1: "NO_COMPUTED_DATA",
+        2: "FUNCTIONAL_TEST",
+        3: "FAILURE_WARNING",
+    }
+
     @property
     def decoded(self) -> int:
         return self._value
@@ -19,13 +33,7 @@ class Discrete(DataFieldType):
 
     @property
     def name(self) -> str:
-        mapping = {
-            0: "NORMAL_OPERATION",
-            1: "NO_COMPUTED_DATA",
-            2: "FUNCTIONAL_TEST",
-            3: "FAILURE_WARNING",
-        }
-        return mapping.get(self._value, "UNKNOWN")
+        return self._VAL_TO_NAME.get(self._value, "UNKNOWN")
 
     def is_valid(self) -> bool:
         return 0 <= self._value <= 3
@@ -68,10 +76,6 @@ class Discrete(DataFieldType):
 
     @classmethod
     def from_name(cls, name: str) -> "Discrete":
-        mapping = {
-            "NORMAL_OPERATION": 0,
-            "NO_COMPUTED_DATA": 1,
-            "FUNCTIONAL_TEST": 2,
-            "FAILURE_WARNING": 3,
-        }
-        return cls(mapping[name])
+        if name not in cls._NAME_TO_VAL:
+            raise ValueError(f"Invalid discrete name: {name}")
+        return cls(cls._NAME_TO_VAL[name])

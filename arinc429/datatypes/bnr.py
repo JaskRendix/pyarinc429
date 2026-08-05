@@ -90,7 +90,8 @@ class BNR(DataFieldType):
     def decode(
         cls, bnr_value: int, bnr_bit_length: int, resolution: DataFieldValue = 1
     ) -> "BNR":
-        sign = (bnr_value >> (bnr_bit_length - 1)) & 1
-        bnr_value -= sign << bnr_bit_length
-        value = bnr_value * resolution
+        # Handle two's complement sign extension properly
+        if bnr_bit_length > 0 and (bnr_value & (1 << (bnr_bit_length - 1))):
+            bnr_value -= 1 << bnr_bit_length
+        value = Decimal(str(bnr_value)) * Decimal(str(resolution))
         return cls(value, resolution)

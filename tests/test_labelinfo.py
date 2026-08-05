@@ -11,7 +11,7 @@ def test_labelinfo_structure():
     assert info.system == "ADC"
     assert info.category == "Air Data"
     assert info.direction == "Source"
-    assert "Altitude" in info.description
+    assert info.description == "Test description"
 
 
 def test_get_label_info_known():

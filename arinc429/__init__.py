@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from .arinc429 import (
-    BCD,
-    BNR,
+from .bitfields import (
     DATA_BITS,
     LABEL_BITS,
     LSB,
@@ -10,17 +8,18 @@ from .arinc429 import (
     PARITY_BIT,
     SDI_BITS,
     SSM_BITS,
-    ARINC429Error,
     BitFieldRange,
-    DataFieldType,
-    Discrete,
-    FieldOverflowError,
-    Word,
 )
 from .builder import WordBuilder
+from .datatypes.base import DataFieldType
+from .datatypes.bcd import BCD
+from .datatypes.bnr import BNR
+from .datatypes.discrete import Discrete
 from .definitions import EQUIP_ADC, EQUIP_IRS, LabelDefinition
+from .errors import ARINC429Error, FieldOverflowError
 from .loader import Arinc615Packetizer
-from .williamsburg import WilliamsburgReceiver, WilliamsburgTransmitter
+from .williamsburg import WilliamsburgSession
+from .word import Word
 
 __all__ = [
     "BCD",
@@ -42,7 +41,6 @@ __all__ = [
     "EQUIP_ADC",
     "EQUIP_IRS",
     "Arinc615Packetizer",
-    "WilliamsburgReceiver",
-    "WilliamsburgTransmitter",
+    "WilliamsburgSession",
     "WordBuilder",
 ]

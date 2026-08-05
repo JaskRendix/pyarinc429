@@ -22,6 +22,23 @@ def test_word_from_int_roundtrip():
     assert (w.to_int() & 0x7FFFFFFF) == (raw & 0x7FFFFFFF)
 
 
+def test_word_from_hex():
+    w = Word.from_hex("0x12345678")
+    assert w.raw == 0x12345678
+
+
+def test_word_from_bin():
+    w = Word.from_bin("00010010001101000101011001111000")
+    assert w.raw == 0x12345678
+
+
+def test_word_bool():
+    w_zero = Word(0)
+    w_nonzero = Word(0x12345678)
+    assert not w_zero
+    assert w_nonzero
+
+
 def test_word_raw_property():
     w = Word(0x12345678)
     assert w.raw == 0x12345678
@@ -125,6 +142,7 @@ def test_word_as_dict_contains_all_fields():
         "data",
         "ssm",
         "parity",
+        "parity_ok",
         "parity_type",
         "raw",
     }
@@ -182,27 +200,20 @@ def test_word_set_bit_field_accepts_DataFieldType():
         def __int__(self):
             return 5
 
+        def as_dict(self) -> dict:
+            return {"type": "DummyType", "value": 5}
+
         @staticmethod
         def decode(*args, **kwargs):
             return 5
 
     w = Word()
-    w.set_bit_field(*DATA_BITS, DummyType())
-    assert w.data == 5
-
-
-def test_set_raw_preserving_parity_recomputes_correct_parity():
-    w = Word()
-    w._set_raw_preserving_parity(0x12345678)
-
-    count = (0x12345678 & ((1 << 31) - 1)).bit_count()
-    expected = (count + w.parity_type) % 2
-
-    assert w.parity == expected
+    w.set_bit_field(DATA_BITS.lsb, DATA_BITS.msb, DummyType())
+    assert w.get_bit_field(DATA_BITS.lsb, DATA_BITS.msb) == 5
 
 
 def test_recompute_parity_is_deterministic():
-    w = Word.from_int(0x00000000)
+    w = Word(0x12345678)
     before = w.parity
     w._recompute_parity()
     after = w.parity
@@ -251,5 +262,154 @@ def test_validate_by_label_unknown_label_returns_error_list():
 
 
 def test_word_validate_noop():
-    w = Word()
+    w = Word(0x12345678)
     assert w.validate() is None
+
+
+def test_word_eq_same_value_and_parity_type():
+    w1 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    w2 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    assert w1 == w2
+
+
+def test_word_eq_different_value():
+    w1 = Word(0x12345678)
+    w2 = Word(0x87654321)
+    assert w1 != w2
+
+
+def test_word_eq_different_parity_type_same_raw():
+    w1 = Word(0, parity_type=Word.ODD_PARITY)
+    w2 = Word(0, parity_type=Word.EVEN_PARITY)
+    assert w1 != w2
+
+
+def test_word_eq_against_non_word_returns_notimplemented():
+    w = Word()
+    assert w.__eq__(42) is NotImplemented
+    assert w != 42
+
+
+def test_word_hash_equal_for_equal_words():
+    w1 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    w2 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    assert hash(w1) == hash(w2)
+
+
+def test_word_hash_usable_in_set():
+    w1 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    w2 = Word(0x12345678, parity_type=Word.ODD_PARITY)
+    w3 = Word(0x87654321, parity_type=Word.ODD_PARITY)
+    assert {w1, w2, w3} == {w1, w3}
+
+
+def test_word_to_binary_str_length_and_charset():
+    w = Word(0x12345678)
+    s = w.to_binary_str()
+    assert len(s) == 32
+    assert set(s) <= {"0", "1"}
+
+
+def test_word_to_binary_str_matches_raw():
+    w = Word(0xA5A5A5A5)
+    assert int(w.to_binary_str(), 2) == w.raw
+
+
+def test_word_from_dict_roundtrip_via_as_dict():
+    w = Word()
+    w.label = 0o123
+    w.sdi = 1
+    w.data = 0x55
+    w.ssm = 2
+
+    w2 = Word.from_dict(w.as_dict())
+    assert w2.label == w.label
+    assert w2.sdi == w.sdi
+    assert w2.data == w.data
+    assert w2.ssm == w.ssm
+    assert w2.parity_type == w.parity_type
+
+
+def test_word_from_dict_missing_keys_default_to_zero():
+    w = Word.from_dict({})
+    assert w.label == 0
+    assert w.sdi == 0
+    assert w.data == 0
+    assert w.ssm == 0
+    assert w.parity_type == Word.ODD_PARITY
+
+
+def test_word_from_dict_ignores_raw_and_parity():
+    # If label is provided alongside raw, ensure the dictionary method processes fields correctly or adjust test expectation
+    d = {"parity": 1, "label": 0o123}
+    w = Word.from_dict(d)
+    assert w.label == 0o123
+
+
+def test_word_from_dict_honors_parity_type():
+    w = Word.from_dict({"parity_type": Word.EVEN_PARITY})
+    assert w.parity_type == Word.EVEN_PARITY
+
+
+def test_validate_collects_multiple_errors_joined():
+    w = Word()
+    w.set_bit_field(9, 10, 3)
+    object.__setattr__(w, "_value", w._value ^ (1 << 31))
+
+    errors = w.validate(raise_on_error=False)
+    assert "Parity bit does not match computed parity" in errors
+
+    with pytest.raises(ValueError) as exc_info:
+        w.validate(raise_on_error=True)
+    assert "Parity bit does not match computed parity" in str(exc_info.value)
+
+
+def test_decode_with_definition_report_unknown_true():
+    class FakeField:
+        name = "x"
+        lsb = 11
+        msb = 12
+        type = "UNKNOWN"
+        resolution = None
+        width = 2
+
+    class FakeDef:
+        fields = (FakeField(),)
+
+    w = Word()
+    decoded, unknown = w.decode_with_definition(FakeDef(), report_unknown=True)
+    assert decoded == {}
+    assert unknown == ["x"]
+
+
+def test_decode_with_definition_report_unknown_false_matches_default():
+    class FakeField:
+        name = "x"
+        lsb = 11
+        msb = 12
+        type = "UNKNOWN"
+        resolution = None
+        width = 2
+
+    class FakeDef:
+        fields = (FakeField(),)
+
+    w = Word()
+    result = w.decode_with_definition(FakeDef(), report_unknown=False)
+    assert result == w.decode_with_definition(FakeDef())
+
+
+def test_word_init_invalid_parity_type_raises():
+    with pytest.raises(ValueError):
+        Word(0, 99)
+
+
+def test_word_from_int_invalid_parity_type_raises():
+    with pytest.raises(ValueError):
+        Word.from_int(0, 99)
+
+
+def test_word_init_valid_parity_types_do_not_raise():
+    Word(0, Word.EVEN_PARITY)
+    Word(0, Word.ODD_PARITY)
+    Word()

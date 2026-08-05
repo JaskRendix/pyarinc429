@@ -73,3 +73,13 @@ def test_api_decode_and_validate_unknown_label():
     assert decoded is None
     assert len(errors) == 1
     assert "not in definitions" in errors[0]
+
+
+def test_api_combine_definitions():
+    from arinc429.api import combine_definitions
+    from arinc429.definitions import EQUIP_ADC, EQUIP_IRS
+
+    combined = combine_definitions(EQUIP_ADC, EQUIP_IRS)
+    assert isinstance(combined, dict)
+    assert len(combined) >= len(EQUIP_ADC)
+    assert len(combined) >= len(EQUIP_IRS)
