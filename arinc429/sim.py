@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 import threading
@@ -8,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
+from .drivers import ArincFrameParser
 from .word import Word
 
 if TYPE_CHECKING:
@@ -43,7 +45,6 @@ class ArincBus:
                 listener.on_word_received(word, source_id)
 
     def publish(self, word: Word, source_id: str) -> None:
-        """Alias for transmit, used by replay components."""
         self.transmit(word, source_id)
 
 
@@ -158,11 +159,9 @@ class FaultyVirtualNode(VirtualNode):
 
 
 class BusRecorder:
-    """Utility to export BusMonitor or bus captured traffic to a file."""
 
     @staticmethod
     def export_to_jsonl(captured_words: list[tuple[float, Word, str]], filepath: Path | str) -> None:
-        """Export captured traffic (timestamp, word integer, parity_ok, source_id) to JSON Lines."""
         path = Path(filepath)
         with path.open("w", encoding="utf-8") as f:
             for timestamp, word, source_id in captured_words:
@@ -176,7 +175,6 @@ class BusRecorder:
 
 
 class ReplayNode:
-    """Replays a recorded JSONL ARINC 429 traffic file onto a virtual bus with original timing."""
 
     def __init__(self, filepath: Path | str, bus: ArincBus, speed_multiplier: float = 1.0) -> None:
         self.filepath = Path(filepath)
@@ -185,7 +183,6 @@ class ReplayNode:
         self._running = False
 
     def play(self) -> None:
-        """Read log records and push words to the bus respecting delta timestamps."""
         if not self.filepath.exists():
             raise FileNotFoundError(f"Record file not found: {self.filepath}")
 
@@ -197,7 +194,7 @@ class ReplayNode:
 
         self._running = True
         records = [json.loads(line) for line in lines]
-        
+
         start_real_time = time.time()
         start_log_time = records[0]["timestamp"]
 
@@ -207,10 +204,10 @@ class ReplayNode:
 
             log_delta = rec["timestamp"] - start_log_time
             target_real_delay = log_delta / self.speed_multiplier
-            
+
             elapsed_real = time.time() - start_real_time
             sleep_time = target_real_delay - elapsed_real
-            
+
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
@@ -219,6 +216,64 @@ class ReplayNode:
 
     def stop(self) -> None:
         self._running = False
+
+
+class AsyncBusTransportDriver(BusListener):
+
+    def __init__(self, bus: ArincBus, transport: Any, source_id: str = "HW_DEVICE") -> None:
+        self.bus = bus
+        self.transport = transport
+        self.parser = ArincFrameParser()
+        self.source_id = source_id
+
+        self._task: asyncio.Task[None] | None = None
+        self._running = False
+
+        self.bus.attach(self)
+
+    async def connect(self) -> None:
+        self.transport.open()
+        self._running = True
+        self._task = asyncio.create_task(self._rx_loop())
+
+    async def disconnect(self) -> None:
+        self._running = False
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+        self.transport.close()
+
+    def on_word_received(self, word: Word, source_id: str) -> None:
+        if source_id == self.source_id:
+            return
+
+        try:
+            payload = word.raw.to_bytes(4, "big")
+            self.transport.write(payload)
+        except Exception:
+            error_word = Word.from_int(0)
+            self.bus.transmit(error_word, f"DRIVER_ERROR:{self.source_id}")
+
+    async def _rx_loop(self) -> None:
+        while self._running:
+            try:
+                data = self.transport.read(64)
+
+                if data:
+                    for word in self.parser.parse(data):
+                        self.bus.transmit(word, self.source_id)
+                else:
+                    await asyncio.sleep(0.001)
+
+            except Exception:
+                error_word = Word.from_int(0)
+                self.bus.transmit(error_word, f"DRIVER_ERROR:{self.source_id}")
+                await asyncio.sleep(0.01)
 
 
 def stop_all(nodes: list[VirtualNode]) -> None:
